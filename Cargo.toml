@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-eframe  = { version = "0.34", features = ["persistence"] }
-egui    = "0.34"
-zip     = { version = "2", default-features = false, features = ["deflate"] }
+eframe  = { version = "0", features = ["persistence"] }
+egui    = "0"
+zip     = { version = "8", default-features = false, features = ["deflate"] }
 walkdir = "2"
 serde   = { version = "1", features = ["derive"] }
 natord  = "1"
