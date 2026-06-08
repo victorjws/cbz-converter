@@ -29,7 +29,14 @@ pub fn render(app: &mut AppState, ui: &mut egui::Ui) {
                     ui.label(short_name).on_hover_text(&entry.folder_name);
 
                     if entry.editing {
-                        ui.text_edit_singleline(&mut entry.metadata.author);
+                        let mut author_str = entry.metadata.author.join(",");
+                        if ui.text_edit_singleline(&mut author_str).changed() {
+                            entry.metadata.author = author_str
+                                .split(',')
+                                .map(|a| a.trim().to_string())
+                                .filter(|a| !a.is_empty())
+                                .collect();
+                        }
                         ui.text_edit_singleline(&mut entry.metadata.title);
 
                         let mut tags_str = entry.metadata.tags.join(",");
@@ -41,7 +48,7 @@ pub fn render(app: &mut AppState, ui: &mut egui::Ui) {
                                 .collect();
                         }
                     } else {
-                        ui.label(&entry.metadata.author);
+                        ui.label(entry.metadata.author.join(", "));
                         ui.label(&entry.metadata.title);
                         ui.label(entry.metadata.tags.join(", "));
                     }

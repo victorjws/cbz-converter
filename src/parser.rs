@@ -130,7 +130,13 @@ impl FormatPattern {
                     };
 
                     match kind {
-                        FieldKind::Author => meta.author = value.to_string(),
+                        FieldKind::Author => {
+                            meta.author = value
+                                .split(self.tags_sep)
+                                .map(|a| a.trim().to_string())
+                                .filter(|a| !a.is_empty())
+                                .collect();
+                        }
                         FieldKind::Title => meta.title = value.to_string(),
                         FieldKind::Tags => {
                             meta.tags = value
@@ -184,7 +190,9 @@ impl FormatPattern {
             match token {
                 Token::Literal(s) => result.push_str(s),
                 Token::Field(kind) => match kind {
-                    FieldKind::Author => result.push_str(&meta.author),
+                    FieldKind::Author => {
+                        result.push_str(&meta.author.join(&self.tags_sep.to_string()))
+                    }
                     FieldKind::Title => result.push_str(&meta.title),
                     FieldKind::Tags => {
                         result.push_str(&meta.tags.join(&self.tags_sep.to_string()));
@@ -208,15 +216,23 @@ mod tests {
     #[test]
     fn full() {
         let m = pat().parse("[Author] Title (SF,Fantasy)");
-        assert_eq!(m.author, "Author");
+        assert_eq!(m.author, vec!["Author"]);
         assert_eq!(m.title, "Title");
         assert_eq!(m.tags, vec!["SF", "Fantasy"]);
     }
 
     #[test]
+    fn multi_author() {
+        let m = pat().parse("[Author1, Author2] Title (SF)");
+        assert_eq!(m.author, vec!["Author1", "Author2"]);
+        assert_eq!(m.title, "Title");
+        assert_eq!(m.tags, vec!["SF"]);
+    }
+
+    #[test]
     fn no_author() {
         let m = pat().parse("Title (Complete)");
-        assert_eq!(m.author, "");
+        assert!(m.author.is_empty());
         assert_eq!(m.title, "Title");
         assert_eq!(m.tags, vec!["Complete"]);
     }
@@ -224,7 +240,7 @@ mod tests {
     #[test]
     fn no_tags() {
         let m = pat().parse("[Author] Title");
-        assert_eq!(m.author, "Author");
+        assert_eq!(m.author, vec!["Author"]);
         assert_eq!(m.title, "Title");
         assert!(m.tags.is_empty());
     }
@@ -233,7 +249,7 @@ mod tests {
     fn title_only() {
         let m = pat().parse("Title");
         assert_eq!(m.title, "Title");
-        assert_eq!(m.author, "");
+        assert!(m.author.is_empty());
         assert!(m.tags.is_empty());
     }
 
@@ -241,7 +257,7 @@ mod tests {
     fn format_full() {
         let p = pat();
         let m = ParsedMetadata {
-            author: "Author".into(),
+            author: vec!["Author".into()],
             title: "Title".into(),
             tags: vec!["SF".into(), "Fantasy".into()],
         };
@@ -249,10 +265,21 @@ mod tests {
     }
 
     #[test]
+    fn format_multi_author() {
+        let p = pat();
+        let m = ParsedMetadata {
+            author: vec!["Author1".into(), "Author2".into()],
+            title: "Title".into(),
+            tags: vec!["SF".into()],
+        };
+        assert_eq!(p.format(&m), "[Author1,Author2] Title (SF)");
+    }
+
+    #[test]
     fn format_no_author() {
         let p = pat();
         let m = ParsedMetadata {
-            author: "".into(),
+            author: vec![],
             title: "Title".into(),
             tags: vec!["Complete".into()],
         };
@@ -263,7 +290,7 @@ mod tests {
     fn format_no_tags() {
         let p = pat();
         let m = ParsedMetadata {
-            author: "Author".into(),
+            author: vec!["Author".into()],
             title: "Title".into(),
             tags: vec![],
         };

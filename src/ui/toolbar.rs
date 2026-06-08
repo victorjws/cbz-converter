@@ -48,6 +48,10 @@ pub fn render_bottom(app: &mut AppState, ui: &mut egui::Ui) {
                     .filter(|e| e.status == ConversionStatus::Pending)
                     .count();
 
+                if ui.button("Add Folders…").clicked() {
+                    app.open_folder_picker(ui.ctx().clone());
+                }
+
                 ui.add_enabled_ui(!app.is_converting && !app.entries.is_empty(), |ui| {
                     if ui.button("Clear All").clicked() {
                         app.entries.clear();

@@ -24,6 +24,7 @@ pub struct AppState {
     pub show_format_help: bool,
     pub is_converting: bool,
     progress_rx: Option<Receiver<ProgressEvent>>,
+    folder_picker_rx: Option<Receiver<Vec<std::path::PathBuf>>>,
 }
 
 impl AppState {
@@ -42,6 +43,7 @@ impl AppState {
             show_format_help: false,
             is_converting: false,
             progress_rx: None,
+            folder_picker_rx: None,
         }
     }
 
@@ -69,6 +71,29 @@ impl AppState {
         self.format_pattern = FormatPattern::compile(template);
         for entry in &mut self.entries {
             entry.metadata = self.format_pattern.parse(&entry.folder_name);
+        }
+    }
+
+    pub fn open_folder_picker(&mut self, ctx: egui::Context) {
+        let (tx, rx) = mpsc::channel();
+        self.folder_picker_rx = Some(rx);
+        std::thread::spawn(move || {
+            let folders = rfd::FileDialog::new().pick_folders().unwrap_or_default();
+            tx.send(folders).ok();
+            ctx.request_repaint();
+        });
+    }
+
+    fn poll_folder_picker(&mut self) {
+        if let Some(rx) = &self.folder_picker_rx {
+            if let Ok(folders) = rx.try_recv() {
+                for path in folders {
+                    if path.is_dir() {
+                        self.add_entry(path);
+                    }
+                }
+                self.folder_picker_rx = None;
+            }
         }
     }
 
@@ -151,6 +176,7 @@ impl AppState {
 impl eframe::App for AppState {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.poll_progress();
+        self.poll_folder_picker();
 
         let dropped: Vec<_> = ui.ctx().input(|i| i.raw.dropped_files.clone());
         for file in dropped {

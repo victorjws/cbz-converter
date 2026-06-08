@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ParsedMetadata {
-    pub author: String,
+    pub author: Vec<String>,
     pub title: String,
     pub tags: Vec<String>,
 }

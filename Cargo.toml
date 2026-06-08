@@ -10,3 +10,4 @@ zip     = { version = "8", default-features = false, features = ["deflate"] }
 walkdir = "2"
 serde   = { version = "1", features = ["derive"] }
 natord  = "1"
+rfd     = "0"

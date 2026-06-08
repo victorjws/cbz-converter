@@ -2,7 +2,7 @@ use crate::models::ParsedMetadata;
 
 pub fn build_comic_info_xml(meta: &ParsedMetadata) -> String {
     let title = xml_escape(&meta.title);
-    let writer = xml_escape(&meta.author);
+    let writer = xml_escape(&meta.author.join(", "));
     let tags = xml_escape(&meta.tags.join(", "));
 
     format!(
