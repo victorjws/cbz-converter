@@ -1,18 +1,24 @@
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver};
 
-use crate::models::{ConversionStatus, FolderEntry, ProgressEvent};
+use crate::models::{ComicInfoField, ConversionStatus, FolderEntry, PresetField, ProgressEvent};
 use crate::parser::FormatPattern;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct AppSettings {
     pub format_template: String,
+    pub preset: Vec<PresetField>,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             format_template: "[{author}] {title} ({tags})".to_string(),
+            // Preserves the previously hardcoded ComicInfo behavior.
+            preset: vec![PresetField {
+                field: ComicInfoField::Manga,
+                value: "YesAndRightToLeft".to_string(),
+            }],
         }
     }
 }
@@ -22,6 +28,7 @@ pub struct AppState {
     pub settings: AppSettings,
     pub format_pattern: FormatPattern,
     pub show_format_help: bool,
+    pub show_preset: bool,
     pub is_converting: bool,
     progress_rx: Option<Receiver<ProgressEvent>>,
     folder_picker_rx: Option<Receiver<Vec<std::path::PathBuf>>>,
@@ -41,6 +48,7 @@ impl AppState {
             format_pattern,
             settings,
             show_format_help: false,
+            show_preset: false,
             is_converting: false,
             progress_rx: None,
             folder_picker_rx: None,
@@ -115,10 +123,12 @@ impl AppState {
             let tx = tx.clone();
             let path = entry.path.clone();
             let metadata = entry.metadata.clone();
+            let preset = self.settings.preset.clone();
             let ctx = ctx.clone();
 
             std::thread::spawn(move || {
-                match crate::converter::convert_folder(&path, &metadata, tx.clone(), index) {
+                match crate::converter::convert_folder(&path, &metadata, &preset, tx.clone(), index)
+                {
                     Ok(_) => {
                         tx.send(ProgressEvent::Done { index }).ok();
                     }

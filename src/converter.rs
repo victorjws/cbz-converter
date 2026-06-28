@@ -2,11 +2,12 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::mpsc::Sender;
 
-use crate::models::{ParsedMetadata, ProgressEvent};
+use crate::models::{ParsedMetadata, PresetField, ProgressEvent};
 
 pub fn convert_folder(
     path: &Path,
     metadata: &ParsedMetadata,
+    preset: &[PresetField],
     tx: Sender<ProgressEvent>,
     index: usize,
 ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
@@ -47,7 +48,7 @@ pub fn convert_folder(
     let options =
         zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
-    let comic_info = crate::metadata::build_comic_info_xml(metadata);
+    let comic_info = crate::metadata::build_comic_info_xml(metadata, preset);
     zip.start_file("ComicInfo.xml", options)?;
     zip.write_all(comic_info.as_bytes())?;
 

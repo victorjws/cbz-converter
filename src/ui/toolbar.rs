@@ -1,5 +1,5 @@
 use crate::app::AppState;
-use crate::models::ConversionStatus;
+use crate::models::{ComicInfoField, ConversionStatus, PresetField};
 
 pub fn render_top(app: &mut AppState, ui: &mut egui::Ui) {
     egui::Panel::top("toolbar_top")
@@ -20,6 +20,15 @@ pub fn render_top(app: &mut AppState, ui: &mut egui::Ui) {
                 if ui.small_button("?").clicked() {
                     app.show_format_help = !app.show_format_help;
                 }
+
+                let preset_label = if app.show_preset {
+                    "ComicInfo Preset ▾"
+                } else {
+                    "ComicInfo Preset ▸"
+                };
+                if ui.button(preset_label).clicked() {
+                    app.show_preset = !app.show_preset;
+                }
             });
 
             if app.show_format_help {
@@ -32,8 +41,89 @@ pub fn render_top(app: &mut AppState, ui: &mut egui::Ui) {
                     .color(egui::Color32::GRAY),
                 );
             }
+
+            if app.show_preset {
+                render_preset(app, ui);
+            }
             ui.add_space(4.0);
         });
+}
+
+fn render_preset(app: &mut AppState, ui: &mut egui::Ui) {
+    ui.add_space(4.0);
+    ui.separator();
+    ui.label(
+        egui::RichText::new("Default ComicInfo fields applied to every CBZ")
+            .small()
+            .color(egui::Color32::GRAY),
+    );
+
+    let mut to_remove: Vec<usize> = Vec::new();
+    for (i, pf) in app.settings.preset.iter_mut().enumerate() {
+        ui.horizontal(|ui| {
+            // Field selector.
+            egui::ComboBox::from_id_salt(("preset_field", i))
+                .selected_text(pf.field.label())
+                .width(150.0)
+                .show_ui(ui, |ui| {
+                    for field in ComicInfoField::ALL {
+                        if ui
+                            .selectable_label(pf.field == *field, field.label())
+                            .clicked()
+                            && pf.field != *field
+                        {
+                            pf.field = *field;
+                            // Reset value when switching to an enum field whose
+                            // allowed set does not contain the current value.
+                            if let Some(allowed) = field.allowed_values() {
+                                if !allowed.contains(&pf.value.as_str()) {
+                                    pf.value = field.default_value();
+                                }
+                            }
+                        }
+                    }
+                });
+
+            // Value input: dropdown for enum fields, free text otherwise.
+            if let Some(allowed) = pf.field.allowed_values() {
+                egui::ComboBox::from_id_salt(("preset_value", i))
+                    .selected_text(pf.value.clone())
+                    .width(200.0)
+                    .show_ui(ui, |ui| {
+                        for v in allowed {
+                            ui.selectable_value(&mut pf.value, v.to_string(), *v);
+                        }
+                    });
+            } else {
+                let hint = if pf.field == ComicInfoField::Tags {
+                    "merged with folder-name tags"
+                } else {
+                    "value"
+                };
+                ui.add(
+                    egui::TextEdit::singleline(&mut pf.value)
+                        .desired_width(200.0)
+                        .hint_text(hint),
+                );
+            }
+
+            if ui.small_button("✕").clicked() {
+                to_remove.push(i);
+            }
+        });
+    }
+
+    for i in to_remove.into_iter().rev() {
+        app.settings.preset.remove(i);
+    }
+
+    if ui.button("+ Add field").clicked() {
+        let field = ComicInfoField::Publisher;
+        app.settings.preset.push(PresetField {
+            value: field.default_value(),
+            field,
+        });
+    }
 }
 
 pub fn render_bottom(app: &mut AppState, ui: &mut egui::Ui) {
