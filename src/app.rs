@@ -32,6 +32,43 @@ impl Default for AppSettings {
     }
 }
 
+/// Best-effort fallback when `DroppedFile::path` is `None`: interpret the name
+/// as a `file://` URI or an absolute path. Returns `None` for anything that
+/// isn't an existing absolute path.
+fn path_from_dropped(file: &egui::DroppedFile) -> Option<PathBuf> {
+    let name = file.name.trim();
+    if name.is_empty() {
+        return None;
+    }
+    let raw = name.strip_prefix("file://").unwrap_or(name);
+    let decoded = percent_decode(raw);
+    let path = PathBuf::from(decoded);
+    if path.is_absolute() && path.exists() {
+        Some(path)
+    } else {
+        None
+    }
+}
+
+/// Minimal `%XX` percent-decoding for `file://` URIs.
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(b) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                out.push(b);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 pub struct AppState {
     pub entries: Vec<FolderEntry>,
     pub settings: AppSettings,
@@ -39,6 +76,7 @@ pub struct AppState {
     pub show_format_help: bool,
     pub show_preset: bool,
     pub is_converting: bool,
+    prev_hovered: bool,
     progress_rx: Option<Receiver<ProgressEvent>>,
     folder_picker_rx: Option<Receiver<Vec<std::path::PathBuf>>>,
 }
@@ -59,6 +97,7 @@ impl AppState {
             show_format_help: false,
             show_preset: false,
             is_converting: false,
+            prev_hovered: false,
             progress_rx: None,
             folder_picker_rx: None,
         }
@@ -204,12 +243,27 @@ impl eframe::App for AppState {
         self.poll_progress();
         self.poll_folder_picker();
 
+        // Log hover transitions so we can tell whether egui receives drag
+        // events at all (useful for diagnosing Wayland drag-and-drop).
+        let hovered = ui.ctx().input(|i| !i.raw.hovered_files.is_empty());
+        if hovered != self.prev_hovered {
+            eprintln!("[dnd] hovered_files non-empty = {hovered}");
+            self.prev_hovered = hovered;
+        }
+
         let dropped: Vec<_> = ui.ctx().input(|i| i.raw.dropped_files.clone());
         for file in dropped {
-            if let Some(path) = file.path {
-                if path.is_dir() {
-                    self.add_entry(path);
-                }
+            eprintln!(
+                "[dnd] dropped: path={:?} name={:?} mime={:?}",
+                file.path, file.name, file.mime
+            );
+            // Native winit usually fills `path`; fall back to parsing the name
+            // as a `file://` URI / plain path otherwise.
+            let path = file.path.clone().or_else(|| path_from_dropped(&file));
+            match path {
+                Some(p) if p.is_dir() => self.add_entry(p),
+                Some(p) => eprintln!("[dnd] ignored (not a directory): {}", p.display()),
+                None => eprintln!("[dnd] ignored (no resolvable path)"),
             }
         }
 

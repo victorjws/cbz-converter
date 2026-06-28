@@ -28,25 +28,21 @@ fn main() -> eframe::Result<()> {
 fn setup_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
 
-    let candidates = [
-        "/System/Library/Fonts/AppleSDGothicNeo.ttc",
-        "/System/Library/Fonts/Supplemental/AppleGothic.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-        "C:\\Windows\\Fonts\\malgun.ttf",
-    ];
+    // Korean font embedded in the binary so Hangul renders on any OS/distro
+    // regardless of which system fonts are installed.
+    fonts.font_data.insert(
+        "korean".to_owned(),
+        egui::FontData::from_static(include_bytes!("../assets/NanumGothic.ttf")).into(),
+    );
 
-    for path in &candidates {
-        if let Ok(data) = std::fs::read(path) {
-            fonts
-                .font_data
-                .insert("cjk".to_owned(), egui::FontData::from_owned(data).into());
-            fonts
-                .families
-                .get_mut(&egui::FontFamily::Proportional)
-                .unwrap()
-                .push("cjk".to_owned());
-            break;
-        }
+    // Append as fallback: default fonts handle Latin first, the embedded font
+    // covers Hangul glyphs they lack.
+    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+        fonts
+            .families
+            .get_mut(&family)
+            .unwrap()
+            .push("korean".to_owned());
     }
 
     ctx.set_fonts(fonts);
