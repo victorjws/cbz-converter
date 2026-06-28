@@ -174,6 +174,87 @@ pub struct PresetField {
     pub value: String,
 }
 
+/// ComicInfo `<Page Type="...">` values. `Story` is the spec default and is
+/// emitted by leaving the attribute off.
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum PageType {
+    FrontCover,
+    InnerCover,
+    Roundup,
+    Story,
+    Advertisement,
+    Editorial,
+    Letters,
+    Preview,
+    BackCover,
+    Other,
+    Deleted,
+}
+
+impl PageType {
+    pub const ALL: &'static [PageType] = &[
+        PageType::FrontCover,
+        PageType::InnerCover,
+        PageType::Roundup,
+        PageType::Story,
+        PageType::Advertisement,
+        PageType::Editorial,
+        PageType::Letters,
+        PageType::Preview,
+        PageType::BackCover,
+        PageType::Other,
+        PageType::Deleted,
+    ];
+
+    pub fn xml_value(self) -> &'static str {
+        match self {
+            PageType::FrontCover => "FrontCover",
+            PageType::InnerCover => "InnerCover",
+            PageType::Roundup => "Roundup",
+            PageType::Story => "Story",
+            PageType::Advertisement => "Advertisement",
+            PageType::Editorial => "Editorial",
+            PageType::Letters => "Letters",
+            PageType::Preview => "Preview",
+            PageType::BackCover => "BackCover",
+            PageType::Other => "Other",
+            PageType::Deleted => "Deleted",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        self.xml_value()
+    }
+}
+
+/// Assigns a `PageType` to a page position. `position` is 1-based; negative
+/// values count from the end (`-1` = last page).
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct PageRule {
+    pub position: i32,
+    pub page_type: PageType,
+}
+
+impl PageRule {
+    /// Resolve to a 0-based page index for a book of `page_count` pages,
+    /// or `None` if the position falls outside the range.
+    pub fn resolve(&self, page_count: usize) -> Option<usize> {
+        let n = page_count as i32;
+        let idx = if self.position > 0 {
+            self.position - 1
+        } else if self.position < 0 {
+            n + self.position
+        } else {
+            return None;
+        };
+        if idx >= 0 && idx < n {
+            Some(idx as usize)
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Clone, PartialEq)]
 pub enum ConversionStatus {
     Pending,

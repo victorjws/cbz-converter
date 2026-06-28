@@ -1,13 +1,16 @@
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver};
 
-use crate::models::{ComicInfoField, ConversionStatus, FolderEntry, PresetField, ProgressEvent};
+use crate::models::{
+    ComicInfoField, ConversionStatus, FolderEntry, PageRule, PageType, PresetField, ProgressEvent,
+};
 use crate::parser::FormatPattern;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct AppSettings {
     pub format_template: String,
     pub preset: Vec<PresetField>,
+    pub page_rules: Vec<PageRule>,
 }
 
 impl Default for AppSettings {
@@ -18,6 +21,11 @@ impl Default for AppSettings {
             preset: vec![PresetField {
                 field: ComicInfoField::Manga,
                 value: "YesAndRightToLeft".to_string(),
+            }],
+            // First page is the cover by convention; user can change/remove it.
+            page_rules: vec![PageRule {
+                position: 1,
+                page_type: PageType::FrontCover,
             }],
         }
     }
@@ -124,11 +132,18 @@ impl AppState {
             let path = entry.path.clone();
             let metadata = entry.metadata.clone();
             let preset = self.settings.preset.clone();
+            let page_rules = self.settings.page_rules.clone();
             let ctx = ctx.clone();
 
             std::thread::spawn(move || {
-                match crate::converter::convert_folder(&path, &metadata, &preset, tx.clone(), index)
-                {
+                match crate::converter::convert_folder(
+                    &path,
+                    &metadata,
+                    &preset,
+                    &page_rules,
+                    tx.clone(),
+                    index,
+                ) {
                     Ok(_) => {
                         tx.send(ProgressEvent::Done { index }).ok();
                     }

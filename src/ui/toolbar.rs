@@ -1,10 +1,10 @@
 use crate::app::AppState;
-use crate::models::{ComicInfoField, ConversionStatus, PresetField};
+use crate::models::{ComicInfoField, ConversionStatus, PageRule, PageType, PresetField};
 
 pub fn render_top(app: &mut AppState, ui: &mut egui::Ui) {
     egui::Panel::top("toolbar_top")
         .min_size(32.0)
-        .show_inside(ui, |ui| {
+        .show(ui, |ui| {
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 ui.label("Format:");
@@ -124,12 +124,56 @@ fn render_preset(app: &mut AppState, ui: &mut egui::Ui) {
             field,
         });
     }
+
+    render_page_rules(app, ui);
+}
+
+fn render_page_rules(app: &mut AppState, ui: &mut egui::Ui) {
+    ui.add_space(6.0);
+    ui.label(
+        egui::RichText::new("Page types  (position: 1 = first page, -1 = last page)")
+            .small()
+            .color(egui::Color32::GRAY),
+    );
+
+    let mut to_remove: Vec<usize> = Vec::new();
+    for (i, rule) in app.settings.page_rules.iter_mut().enumerate() {
+        ui.horizontal(|ui| {
+            ui.add(
+                egui::DragValue::new(&mut rule.position)
+                    .speed(1)
+                    .prefix("page "),
+            );
+            egui::ComboBox::from_id_salt(("page_type", i))
+                .selected_text(rule.page_type.label())
+                .width(150.0)
+                .show_ui(ui, |ui| {
+                    for t in PageType::ALL {
+                        ui.selectable_value(&mut rule.page_type, *t, t.label());
+                    }
+                });
+            if ui.small_button("✕").clicked() {
+                to_remove.push(i);
+            }
+        });
+    }
+
+    for i in to_remove.into_iter().rev() {
+        app.settings.page_rules.remove(i);
+    }
+
+    if ui.button("+ Add page type").clicked() {
+        app.settings.page_rules.push(PageRule {
+            position: 1,
+            page_type: PageType::FrontCover,
+        });
+    }
 }
 
 pub fn render_bottom(app: &mut AppState, ui: &mut egui::Ui) {
     egui::Panel::bottom("toolbar_bottom")
         .min_size(40.0)
-        .show_inside(ui, |ui| {
+        .show(ui, |ui| {
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 let n_pending = app

@@ -6,7 +6,7 @@ pub fn render(app: &mut crate::app::AppState, ui: &mut egui::Ui) {
     toolbar::render_top(app, ui);
     toolbar::render_bottom(app, ui);
 
-    egui::CentralPanel::default().show_inside(ui, |ui| {
+    egui::CentralPanel::default().show(ui, |ui| {
         if app.entries.is_empty() {
             drop_zone::render(ui);
         } else {
