@@ -227,12 +227,15 @@ impl PageType {
     }
 }
 
-/// Assigns a `PageType` to a page position. `position` is 1-based; negative
-/// values count from the end (`-1` = last page).
+/// Assigns page attributes to a page position. `position` is 1-based; negative
+/// values count from the end (`-1` = last page). `double_page` maps to the
+/// ComicInfo `<Page DoublePage="true">` attribute, independent of the type.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PageRule {
     pub position: i32,
     pub page_type: PageType,
+    #[serde(default)]
+    pub double_page: bool,
 }
 
 impl PageRule {

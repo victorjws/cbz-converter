@@ -152,6 +152,7 @@ fn render_page_rules(app: &mut AppState, ui: &mut egui::Ui) {
                         ui.selectable_value(&mut rule.page_type, *t, t.label());
                     }
                 });
+            ui.checkbox(&mut rule.double_page, "Double");
             if ui.small_button("✕").clicked() {
                 to_remove.push(i);
             }
@@ -166,6 +167,7 @@ fn render_page_rules(app: &mut AppState, ui: &mut egui::Ui) {
         app.settings.page_rules.push(PageRule {
             position: 1,
             page_type: PageType::FrontCover,
+            double_page: false,
         });
     }
 }

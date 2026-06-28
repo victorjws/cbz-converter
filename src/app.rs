@@ -26,6 +26,7 @@ impl Default for AppSettings {
             page_rules: vec![PageRule {
                 position: 1,
                 page_type: PageType::FrontCover,
+                double_page: false,
             }],
         }
     }

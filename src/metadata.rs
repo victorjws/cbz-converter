@@ -32,21 +32,24 @@ pub fn build_comic_info_xml(
     if page_count > 0 {
         push_element(&mut body, "PageCount", &page_count.to_string());
 
-        let mut types: Vec<Option<&'static str>> = vec![None; page_count];
+        // Per-page attributes: (Type, DoublePage). Later rules win.
+        let mut attrs: Vec<(Option<&'static str>, bool)> = vec![(None, false); page_count];
         for rule in page_rules {
             if let Some(idx) = rule.resolve(page_count) {
-                types[idx] = Some(rule.page_type.xml_value());
+                attrs[idx] = (Some(rule.page_type.xml_value()), rule.double_page);
             }
         }
 
         body.push_str("  <Pages>\n");
-        for (i, page_type) in types.iter().enumerate() {
-            match page_type {
-                Some(t) => {
-                    body.push_str(&format!("    <Page Image=\"{i}\" Type=\"{t}\" />\n"));
-                }
-                None => body.push_str(&format!("    <Page Image=\"{i}\" />\n")),
+        for (i, (page_type, double_page)) in attrs.iter().enumerate() {
+            body.push_str(&format!("    <Page Image=\"{i}\""));
+            if let Some(t) = page_type {
+                body.push_str(&format!(" Type=\"{t}\""));
             }
+            if *double_page {
+                body.push_str(" DoublePage=\"true\"");
+            }
+            body.push_str(" />\n");
         }
         body.push_str("  </Pages>\n");
     }
@@ -112,6 +115,7 @@ mod tests {
         PageRule {
             position,
             page_type,
+            double_page: false,
         }
     }
 
@@ -214,6 +218,19 @@ mod tests {
         assert!(xml.contains("<Page Image=\"2\" />"));
         assert!(xml.contains("<Page Image=\"3\" />"));
         assert!(xml.contains("<Page Image=\"4\" Type=\"BackCover\" />"));
+    }
+
+    #[test]
+    fn page_rule_double_page() {
+        let rules = vec![PageRule {
+            position: 3,
+            page_type: PageType::Story,
+            double_page: true,
+        }];
+        let xml = build_comic_info_xml(&meta(), &[], 4, &rules);
+        assert!(xml.contains("<Page Image=\"2\" Type=\"Story\" DoublePage=\"true\" />"));
+        // Other pages stay plain.
+        assert!(xml.contains("<Page Image=\"0\" />"));
     }
 
     #[test]
