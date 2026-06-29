@@ -209,19 +209,29 @@ fn render_preset(app: &mut AppState, ui: &mut egui::Ui) {
         app.settings.preset.remove(i);
     }
 
-    if ui.button("+ Add field").clicked() {
-        // Default to the first field (in canonical order) not already present;
-        // fall back to the last field if every field is already added.
-        let field = ComicInfoField::ALL
-            .iter()
-            .copied()
-            .find(|f| !app.settings.preset.iter().any(|pf| pf.field == *f))
-            .unwrap_or(ComicInfoField::ALL[ComicInfoField::ALL.len() - 1]);
-        app.settings.preset.push(PresetField {
-            value: field.default_value(),
-            field,
-        });
-    }
+    ui.horizontal(|ui| {
+        if ui.button("+ Add field").clicked() {
+            // Default to the first field (in canonical order) not already
+            // present; fall back to the last field if every field is added.
+            let field = ComicInfoField::ALL
+                .iter()
+                .copied()
+                .find(|f| !app.settings.preset.iter().any(|pf| pf.field == *f))
+                .unwrap_or(ComicInfoField::ALL[ComicInfoField::ALL.len() - 1]);
+            app.settings.preset.push(PresetField {
+                value: field.default_value(),
+                field,
+            });
+        }
+
+        if ui
+            .button("Import ComicInfo…")
+            .on_hover_text("Replace the preset with fields read from a ComicInfo.xml or .cbz")
+            .clicked()
+        {
+            app.open_import_picker(ui.ctx().clone());
+        }
+    });
 
     render_page_rules(app, ui);
 }
@@ -453,6 +463,11 @@ pub fn render_bottom(app: &mut AppState, ui: &mut egui::Ui) {
                         app.entries.clear();
                     }
                 });
+
+                ui.separator();
+
+                ui.checkbox(&mut app.settings.rename_images, "Rename images (0-padded)")
+                    .on_hover_text("Rename images inside each CBZ to 0,1,2,… (zero-padded)");
 
                 ui.separator();
 

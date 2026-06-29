@@ -122,6 +122,9 @@ fn merge_tags(meta: &ParsedMetadata, preset: &[PresetField]) -> Vec<String> {
             out.push(tag);
         }
     }
+    // Alphabetize (case-insensitive, natural) so output order is independent of
+    // the order tags were selected/entered.
+    out.sort_by(|a, b| natord::compare(&a.to_lowercase(), &b.to_lowercase()));
     out
 }
 
@@ -181,7 +184,7 @@ mod tests {
         let xml = build_comic_info_xml(&meta(), &[], 0, &[]);
         assert!(xml.contains("<Series>Title</Series>"));
         assert!(xml.contains("<Writer>Author</Writer>"));
-        assert!(xml.contains("<Tags>SF, Fantasy</Tags>"));
+        assert!(xml.contains("<Tags>Fantasy, SF</Tags>"));
         // Title is preset-only: not emitted without a preset row.
         assert!(!xml.contains("<Title>"));
         // No Manga line unless preset provides it.
@@ -212,7 +215,7 @@ mod tests {
         // Folder has SF, Fantasy; preset adds Fantasy (dup) and Webtoon.
         let preset = vec![pf(ComicInfoField::Tags, "Fantasy, Webtoon")];
         let xml = build_comic_info_xml(&meta(), &preset, 0, &[]);
-        assert!(xml.contains("<Tags>SF, Fantasy, Webtoon</Tags>"));
+        assert!(xml.contains("<Tags>Fantasy, SF, Webtoon</Tags>"));
     }
 
     #[test]
@@ -220,7 +223,7 @@ mod tests {
         // Multi-line Tags box: newlines act as separators alongside commas.
         let preset = vec![pf(ComicInfoField::Tags, "Webtoon\nDrama, Action")];
         let xml = build_comic_info_xml(&meta(), &preset, 0, &[]);
-        assert!(xml.contains("<Tags>SF, Fantasy, Webtoon, Drama, Action</Tags>"));
+        assert!(xml.contains("<Tags>Action, Drama, Fantasy, SF, Webtoon</Tags>"));
     }
 
     #[test]

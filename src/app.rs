@@ -22,6 +22,10 @@ pub struct AppSettings {
     /// Saved genre vocabulary the user picks from in the preset Genre field.
     #[serde(default)]
     pub genre_library: Vec<String>,
+    /// When true, images inside each CBZ are renamed to a zero-padded running
+    /// index (`0,1,2,…`) instead of keeping their original relative paths.
+    #[serde(default)]
+    pub rename_images: bool,
 }
 
 impl Default for AppSettings {
@@ -43,6 +47,7 @@ impl Default for AppSettings {
             preset_series: String::new(),
             tag_library: Vec::new(),
             genre_library: Vec::new(),
+            rename_images: false,
         }
     }
 }
@@ -102,6 +107,7 @@ pub struct AppState {
     prev_hovered: bool,
     progress_rx: Option<Receiver<ProgressEvent>>,
     folder_picker_rx: Option<Receiver<Vec<std::path::PathBuf>>>,
+    import_rx: Option<Receiver<Option<PathBuf>>>,
 }
 
 impl AppState {
@@ -125,6 +131,7 @@ impl AppState {
             prev_hovered: false,
             progress_rx: None,
             folder_picker_rx: None,
+            import_rx: None,
         }
     }
 
@@ -188,6 +195,39 @@ impl AppState {
         }
     }
 
+    pub fn open_import_picker(&mut self, ctx: egui::Context) {
+        let (tx, rx) = mpsc::channel();
+        self.import_rx = Some(rx);
+        std::thread::spawn(move || {
+            let file = rfd::FileDialog::new()
+                .add_filter("ComicInfo", &["xml", "cbz", "zip"])
+                .pick_file();
+            tx.send(file).ok();
+            ctx.request_repaint();
+        });
+    }
+
+    fn poll_import(&mut self) {
+        if let Some(rx) = &self.import_rx {
+            if let Ok(picked) = rx.try_recv() {
+                self.import_rx = None;
+                if let Some(path) = picked {
+                    match crate::comicinfo_import::read_xml(&path)
+                        .and_then(|xml| crate::comicinfo_import::parse(&xml))
+                    {
+                        Ok(imported) => {
+                            // Replace the current preset with the imported fields.
+                            self.settings.preset = imported.preset;
+                            self.settings.preset_series = imported.series.unwrap_or_default();
+                            self.show_preset = true;
+                        }
+                        Err(e) => eprintln!("[import] {}: {e}", path.display()),
+                    }
+                }
+            }
+        }
+    }
+
     pub fn start_conversion(&mut self, ctx: egui::Context) {
         if self.is_converting {
             return;
@@ -212,6 +252,7 @@ impl AppState {
             }
             let preset = self.settings.preset.clone();
             let page_rules = self.settings.page_rules.clone();
+            let rename_images = self.settings.rename_images;
             let ctx = ctx.clone();
 
             std::thread::spawn(move || {
@@ -220,6 +261,7 @@ impl AppState {
                     &metadata,
                     &preset,
                     &page_rules,
+                    rename_images,
                     tx.clone(),
                     index,
                 ) {
@@ -281,6 +323,7 @@ impl eframe::App for AppState {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.poll_progress();
         self.poll_folder_picker();
+        self.poll_import();
 
         // Log hover transitions so we can tell whether egui receives drag
         // events at all (useful for diagnosing Wayland drag-and-drop).

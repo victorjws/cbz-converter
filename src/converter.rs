@@ -9,6 +9,7 @@ pub fn convert_folder(
     metadata: &ParsedMetadata,
     preset: &[PresetField],
     page_rules: &[PageRule],
+    rename_images: bool,
     tx: Sender<ProgressEvent>,
     index: usize,
 ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
@@ -55,9 +56,20 @@ pub fn convert_folder(
     zip.write_all(comic_info.as_bytes())?;
 
     let total = images.len();
+    // Padding width for renamed entries: matches the total image count's digits.
+    let width = total.to_string().len();
     for (i, img_path) in images.iter().enumerate() {
-        let relative = img_path.strip_prefix(path).map_err(|e| e.to_string())?;
-        let zip_name = relative.to_str().ok_or("Invalid path.")?.replace('\\', "/");
+        let zip_name = if rename_images {
+            let ext = img_path
+                .extension()
+                .and_then(|s| s.to_str())
+                .unwrap_or("jpg")
+                .to_lowercase();
+            format!("{i:0width$}.{ext}")
+        } else {
+            let relative = img_path.strip_prefix(path).map_err(|e| e.to_string())?;
+            relative.to_str().ok_or("Invalid path.")?.replace('\\', "/")
+        };
 
         zip.start_file(&zip_name, options)?;
         let data = std::fs::read(img_path)?;

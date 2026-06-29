@@ -1,4 +1,5 @@
 mod app;
+mod comicinfo_import;
 mod config;
 mod converter;
 mod metadata;

@@ -199,6 +199,11 @@ impl ComicInfoField {
         )
     }
 
+    /// Reverse of `xml_tag`: find the field for a ComicInfo.xml element name.
+    pub fn from_xml_tag(tag: &str) -> Option<ComicInfoField> {
+        Self::ALL.iter().copied().find(|f| f.xml_tag() == tag)
+    }
+
     /// Canonical ComicInfo position of this field, used to keep preset rows
     /// sorted in spec order (matching the XML output order).
     pub fn order(self) -> usize {
