@@ -299,28 +299,36 @@ fn render_string_library(
 
     let mut renames: Vec<(String, String)> = Vec::new();
     let mut to_remove: Vec<usize> = Vec::new();
-    for (i, item) in library.iter_mut().enumerate() {
-        ui.horizontal(|ui| {
-            let resp = ui.add(egui::TextEdit::singleline(item).desired_width(200.0));
-            if resp.gained_focus() {
-                *edit_snapshot = Some(item.clone());
-            }
-            if resp.lost_focus() {
-                if let Some(old) = edit_snapshot.take() {
-                    let new = item.trim().to_string();
-                    if new.is_empty() {
-                        *item = old; // reject blank rename
-                    } else if new != old {
-                        *item = new.clone();
-                        renames.push((old, new));
+    // Cap the list height and make it scrollable so a large library never
+    // pushes the "+ Add" row below the visible panel area.
+    egui::ScrollArea::vertical()
+        .id_salt(description)
+        .max_height(200.0)
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            for (i, item) in library.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    let resp = ui.add(egui::TextEdit::singleline(item).desired_width(200.0));
+                    if resp.gained_focus() {
+                        *edit_snapshot = Some(item.clone());
                     }
-                }
-            }
-            if ui.small_button("✕").clicked() {
-                to_remove.push(i);
+                    if resp.lost_focus() {
+                        if let Some(old) = edit_snapshot.take() {
+                            let new = item.trim().to_string();
+                            if new.is_empty() {
+                                *item = old; // reject blank rename
+                            } else if new != old {
+                                *item = new.clone();
+                                renames.push((old, new));
+                            }
+                        }
+                    }
+                    if ui.small_button("✕").clicked() {
+                        to_remove.push(i);
+                    }
+                });
             }
         });
-    }
     for i in to_remove.into_iter().rev() {
         library.remove(i);
     }
