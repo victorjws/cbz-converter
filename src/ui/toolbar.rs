@@ -201,7 +201,13 @@ fn render_preset(app: &mut AppState, ui: &mut egui::Ui) {
     }
 
     if ui.button("+ Add field").clicked() {
-        let field = ComicInfoField::Publisher;
+        // Default to the first field (in canonical order) not already present;
+        // fall back to the last field if every field is already added.
+        let field = ComicInfoField::ALL
+            .iter()
+            .copied()
+            .find(|f| !app.settings.preset.iter().any(|pf| pf.field == *f))
+            .unwrap_or(ComicInfoField::ALL[ComicInfoField::ALL.len() - 1]);
         app.settings.preset.push(PresetField {
             value: field.default_value(),
             field,
