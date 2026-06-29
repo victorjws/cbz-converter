@@ -137,13 +137,19 @@ impl FormatPattern {
                                 .filter(|a| !a.is_empty())
                                 .collect();
                         }
-                        FieldKind::Title => meta.title = value.to_string(),
+                        FieldKind::Title => {
+                            // Per ComicInfo spec, Series is the work title and
+                            // Title the individual episode. The folder name only
+                            // carries one title, so seed both; the user can edit
+                            // either per-folder afterwards.
+                            meta.title = value.to_string();
+                            meta.series = value.to_string();
+                        }
                         FieldKind::Tags => {
-                            meta.tags = value
-                                .split(self.tags_sep)
-                                .map(|t| t.trim().to_string())
-                                .filter(|t| !t.is_empty())
-                                .collect();
+                            // Tags are no longer parsed from the folder name; the
+                            // `{tags}` token only acts as a title boundary so the
+                            // trailing region is consumed (and discarded) instead
+                            // of being absorbed into the title.
                         }
                     }
                     i += 1;
@@ -163,7 +169,8 @@ impl FormatPattern {
         for i in 0..n {
             let is_empty_optional = match &tokens[i] {
                 Token::Field(FieldKind::Author) => meta.author.is_empty(),
-                Token::Field(FieldKind::Tags) => meta.tags.is_empty(),
+                // Tags are no longer stored/emitted, so always drop the region.
+                Token::Field(FieldKind::Tags) => true,
                 _ => false,
             };
 
@@ -194,9 +201,8 @@ impl FormatPattern {
                         result.push_str(&meta.author.join(&self.tags_sep.to_string()))
                     }
                     FieldKind::Title => result.push_str(&meta.title),
-                    FieldKind::Tags => {
-                        result.push_str(&meta.tags.join(&self.tags_sep.to_string()));
-                    }
+                    // Tags are no longer stored on the metadata; nothing to emit.
+                    FieldKind::Tags => {}
                 },
             }
         }
@@ -215,10 +221,28 @@ mod tests {
 
     #[test]
     fn full() {
+        // Tags are no longer parsed; the trailing region is consumed/discarded.
         let m = pat().parse("[Author] Title (SF,Fantasy)");
         assert_eq!(m.author, vec!["Author"]);
         assert_eq!(m.title, "Title");
-        assert_eq!(m.tags, vec!["SF", "Fantasy"]);
+        assert!(m.tags.is_empty());
+    }
+
+    #[test]
+    fn series_and_title_filled() {
+        // The folder-name title seeds both Series and Title.
+        let m = pat().parse("[Author] Title (SF)");
+        assert_eq!(m.title, "Title");
+        assert_eq!(m.series, "Title");
+    }
+
+    #[test]
+    fn title_not_polluted_by_tags() {
+        // The `({tags})` region must not be absorbed into the title.
+        let m = pat().parse("[A] Title (SF, Fantasy)");
+        assert_eq!(m.title, "Title");
+        assert_eq!(m.series, "Title");
+        assert!(m.tags.is_empty());
     }
 
     #[test]
@@ -226,7 +250,7 @@ mod tests {
         let m = pat().parse("[Author1, Author2] Title (SF)");
         assert_eq!(m.author, vec!["Author1", "Author2"]);
         assert_eq!(m.title, "Title");
-        assert_eq!(m.tags, vec!["SF"]);
+        assert!(m.tags.is_empty());
     }
 
     #[test]
@@ -234,7 +258,7 @@ mod tests {
         let m = pat().parse("Title (Complete)");
         assert!(m.author.is_empty());
         assert_eq!(m.title, "Title");
-        assert_eq!(m.tags, vec!["Complete"]);
+        assert!(m.tags.is_empty());
     }
 
     #[test]
@@ -258,10 +282,11 @@ mod tests {
         let p = pat();
         let m = ParsedMetadata {
             author: vec!["Author".into()],
+            series: "Title".into(),
             title: "Title".into(),
-            tags: vec!["SF".into(), "Fantasy".into()],
+            tags: vec![],
         };
-        assert_eq!(p.format(&m), "[Author] Title (SF,Fantasy)");
+        assert_eq!(p.format(&m), "[Author] Title");
     }
 
     #[test]
@@ -269,10 +294,11 @@ mod tests {
         let p = pat();
         let m = ParsedMetadata {
             author: vec!["Author1".into(), "Author2".into()],
+            series: "Title".into(),
             title: "Title".into(),
-            tags: vec!["SF".into()],
+            tags: vec![],
         };
-        assert_eq!(p.format(&m), "[Author1,Author2] Title (SF)");
+        assert_eq!(p.format(&m), "[Author1,Author2] Title");
     }
 
     #[test]
@@ -280,20 +306,10 @@ mod tests {
         let p = pat();
         let m = ParsedMetadata {
             author: vec![],
-            title: "Title".into(),
-            tags: vec!["Complete".into()],
-        };
-        assert_eq!(p.format(&m), "Title (Complete)");
-    }
-
-    #[test]
-    fn format_no_tags() {
-        let p = pat();
-        let m = ParsedMetadata {
-            author: vec!["Author".into()],
+            series: "Title".into(),
             title: "Title".into(),
             tags: vec![],
         };
-        assert_eq!(p.format(&m), "[Author] Title");
+        assert_eq!(p.format(&m), "Title");
     }
 }

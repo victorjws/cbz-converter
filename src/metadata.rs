@@ -1,5 +1,25 @@
 use crate::models::{ComicInfoField, PageRule, ParsedMetadata, PresetField};
 
+/// Creator-role fields that default to the author value when the preset
+/// provides no explicit value of their own. `Writer` is handled separately
+/// (always emitted from the author at the top of the document).
+const AUTHOR_DEFAULT: &[ComicInfoField] = &[
+    ComicInfoField::Penciller,
+    ComicInfoField::Inker,
+    ComicInfoField::Colorist,
+    ComicInfoField::Letterer,
+    ComicInfoField::CoverArtist,
+    ComicInfoField::Editor,
+];
+
+/// Replace per-folder placeholders in a free-text preset value. Mirrors the
+/// `{author}`/`{title}` tokens used by the folder-name format pattern.
+fn apply_placeholders(value: &str, meta: &ParsedMetadata) -> String {
+    value
+        .replace("{author}", &meta.author.join(", "))
+        .replace("{title}", &meta.title)
+}
+
 pub fn build_comic_info_xml(
     meta: &ParsedMetadata,
     preset: &[PresetField],
@@ -7,10 +27,13 @@ pub fn build_comic_info_xml(
     page_rules: &[PageRule],
 ) -> String {
     let mut body = String::new();
+    let author_value = meta.author.join(", ");
 
-    // Title and Writer come from the per-folder parsing, always first.
+    // Title, Series and Writer come from the per-folder parsing / edits, always
+    // first. Spec-wise Series is the work title and Title the individual episode.
     push_element(&mut body, "Title", &meta.title);
-    push_element(&mut body, "Writer", &meta.author.join(", "));
+    push_element(&mut body, "Series", &meta.series);
+    push_element(&mut body, "Writer", &author_value);
 
     // Tags: merge folder-name tags with any preset Tags rows, de-duplicated.
     let merged_tags = merge_tags(meta, preset);
@@ -22,8 +45,23 @@ pub fn build_comic_info_xml(
         if *field == ComicInfoField::Tags {
             continue;
         }
+        // Free-text fields support per-folder placeholders; enum values are
+        // emitted verbatim.
+        let mut emitted = false;
         for pf in preset.iter().filter(|pf| pf.field == *field) {
-            push_element(&mut body, field.xml_tag(), &pf.value);
+            let value = if field.allowed_values().is_none() {
+                apply_placeholders(&pf.value, meta)
+            } else {
+                pf.value.clone()
+            };
+            if !value.is_empty() {
+                push_element(&mut body, field.xml_tag(), &value);
+                emitted = true;
+            }
+        }
+        // Creator-role fields fall back to the author when unset.
+        if !emitted && AUTHOR_DEFAULT.contains(field) && !author_value.is_empty() {
+            push_element(&mut body, field.xml_tag(), &author_value);
         }
     }
 
@@ -69,8 +107,12 @@ fn merge_tags(meta: &ParsedMetadata, preset: &[PresetField]) -> Vec<String> {
     let preset_tags = preset
         .iter()
         .filter(|pf| pf.field == ComicInfoField::Tags)
-        .flat_map(|pf| pf.value.split(','))
-        .map(|t| t.trim().to_string());
+        .flat_map(|pf| {
+            apply_placeholders(&pf.value, meta)
+                .split(',')
+                .map(|t| t.trim().to_string())
+                .collect::<Vec<_>>()
+        });
 
     let mut out: Vec<String> = Vec::new();
     for tag in meta.tags.iter().cloned().chain(preset_tags) {
@@ -122,6 +164,7 @@ mod tests {
     fn meta() -> ParsedMetadata {
         ParsedMetadata {
             author: vec!["Author".into()],
+            series: "Title".into(),
             title: "Title".into(),
             tags: vec!["SF".into(), "Fantasy".into()],
         }
@@ -174,11 +217,113 @@ mod tests {
     fn xml_escaped() {
         let m = ParsedMetadata {
             author: vec![],
+            series: String::new(),
             title: "Tom & <Jerry>".into(),
             tags: vec![],
         };
         let xml = build_comic_info_xml(&m, &[], 0, &[]);
         assert!(xml.contains("<Title>Tom &amp; &lt;Jerry&gt;</Title>"));
+    }
+
+    #[test]
+    fn series_emitted() {
+        let m = ParsedMetadata {
+            author: vec![],
+            series: "Work".into(),
+            title: "Ep 1".into(),
+            tags: vec![],
+        };
+        let xml = build_comic_info_xml(&m, &[], 0, &[]);
+        assert!(xml.contains("<Series>Work</Series>"));
+        assert!(xml.contains("<Title>Ep 1</Title>"));
+    }
+
+    #[test]
+    fn placeholder_substituted() {
+        let preset = vec![pf(ComicInfoField::CoverArtist, "{author}")];
+        let xml = build_comic_info_xml(&meta(), &preset, 0, &[]);
+        assert!(xml.contains("<CoverArtist>Author</CoverArtist>"));
+    }
+
+    #[test]
+    fn placeholder_multi_author() {
+        let m = ParsedMetadata {
+            author: vec!["A".into(), "B".into()],
+            series: String::new(),
+            title: "T".into(),
+            tags: vec![],
+        };
+        let preset = vec![pf(ComicInfoField::Publisher, "by {author}")];
+        let xml = build_comic_info_xml(&m, &preset, 0, &[]);
+        assert!(xml.contains("<Publisher>by A, B</Publisher>"));
+    }
+
+    #[test]
+    fn enum_value_not_substituted() {
+        // Enum fields keep their literal value (placeholders never apply).
+        let preset = vec![pf(ComicInfoField::Manga, "Yes")];
+        let xml = build_comic_info_xml(&meta(), &preset, 0, &[]);
+        assert!(xml.contains("<Manga>Yes</Manga>"));
+    }
+
+    #[test]
+    fn mixed_literal_placeholder() {
+        let preset = vec![pf(ComicInfoField::Publisher, "art by {author}")];
+        let xml = build_comic_info_xml(&meta(), &preset, 0, &[]);
+        assert!(xml.contains("<Publisher>art by Author</Publisher>"));
+    }
+
+    #[test]
+    fn roles_default_to_author() {
+        let m = ParsedMetadata {
+            author: vec!["Kim".into()],
+            series: String::new(),
+            title: "T".into(),
+            tags: vec![],
+        };
+        let xml = build_comic_info_xml(&m, &[], 0, &[]);
+        for tag in [
+            "Penciller",
+            "Inker",
+            "Colorist",
+            "Letterer",
+            "CoverArtist",
+            "Editor",
+        ] {
+            assert!(
+                xml.contains(&format!("<{tag}>Kim</{tag}>")),
+                "missing author default for {tag}"
+            );
+        }
+    }
+
+    #[test]
+    fn roles_no_author_not_emitted() {
+        let m = ParsedMetadata {
+            author: vec![],
+            series: String::new(),
+            title: "T".into(),
+            tags: vec![],
+        };
+        let xml = build_comic_info_xml(&m, &[], 0, &[]);
+        assert!(!xml.contains("<Penciller>"));
+        assert!(!xml.contains("<CoverArtist>"));
+    }
+
+    #[test]
+    fn role_preset_overrides_author() {
+        let m = ParsedMetadata {
+            author: vec!["Kim".into()],
+            series: String::new(),
+            title: "T".into(),
+            tags: vec![],
+        };
+        let preset = vec![pf(ComicInfoField::CoverArtist, "Lee")];
+        let xml = build_comic_info_xml(&m, &preset, 0, &[]);
+        assert!(xml.contains("<CoverArtist>Lee</CoverArtist>"));
+        assert!(!xml.contains("<CoverArtist>Kim</CoverArtist>"));
+        // Other roles still fall back to the author.
+        assert!(xml.contains("<Penciller>Kim</Penciller>"));
     }
 
     #[test]

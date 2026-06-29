@@ -2,7 +2,8 @@ use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver};
 
 use crate::models::{
-    ComicInfoField, ConversionStatus, FolderEntry, PageRule, PageType, PresetField, ProgressEvent,
+    ComicInfoField, ConversionStatus, EditedFields, FolderEntry, PageRule, PageType, PresetField,
+    ProgressEvent,
 };
 use crate::parser::FormatPattern;
 
@@ -11,6 +12,18 @@ pub struct AppSettings {
     pub format_template: String,
     pub preset: Vec<PresetField>,
     pub page_rules: Vec<PageRule>,
+    /// Global Series/Title set in the preset. When non-empty they override the
+    /// per-folder value for every CBZ; blank falls back to the per-folder value.
+    #[serde(default)]
+    pub preset_series: String,
+    #[serde(default)]
+    pub preset_title: String,
+    /// Saved tag vocabulary the user picks from in the preset Tags field.
+    #[serde(default)]
+    pub tag_library: Vec<String>,
+    /// Saved genre vocabulary the user picks from in the preset Genre field.
+    #[serde(default)]
+    pub genre_library: Vec<String>,
 }
 
 impl Default for AppSettings {
@@ -28,6 +41,10 @@ impl Default for AppSettings {
                 page_type: PageType::FrontCover,
                 double_page: false,
             }],
+            preset_series: String::new(),
+            preset_title: String::new(),
+            tag_library: Vec::new(),
+            genre_library: Vec::new(),
         }
     }
 }
@@ -75,6 +92,14 @@ pub struct AppState {
     pub format_pattern: FormatPattern,
     pub show_format_help: bool,
     pub show_preset: bool,
+    pub show_tag_library: bool,
+    pub show_genre_library: bool,
+    /// "+ Add" input buffers for the two libraries.
+    pub tag_library_input: String,
+    pub genre_library_input: String,
+    /// Snapshot of a library entry captured when its text field gains focus, so
+    /// a rename can be detected (and propagated) when the field loses focus.
+    pub library_edit_snapshot: Option<String>,
     pub is_converting: bool,
     prev_hovered: bool,
     progress_rx: Option<Receiver<ProgressEvent>>,
@@ -96,6 +121,11 @@ impl AppState {
             settings,
             show_format_help: false,
             show_preset: false,
+            show_tag_library: false,
+            show_genre_library: false,
+            tag_library_input: String::new(),
+            genre_library_input: String::new(),
+            library_edit_snapshot: None,
             is_converting: false,
             prev_hovered: false,
             progress_rx: None,
@@ -117,6 +147,7 @@ impl AppState {
             path,
             folder_name,
             metadata,
+            edited: EditedFields::default(),
             status: ConversionStatus::Pending,
             editing: false,
         });
@@ -126,7 +157,19 @@ impl AppState {
         self.settings.format_template = template.to_string();
         self.format_pattern = FormatPattern::compile(template);
         for entry in &mut self.entries {
-            entry.metadata = self.format_pattern.parse(&entry.folder_name);
+            let parsed = self.format_pattern.parse(&entry.folder_name);
+            // Re-parse from the folder name, but keep any field the user has
+            // manually edited (manual input takes priority).
+            if !entry.edited.author {
+                entry.metadata.author = parsed.author;
+            }
+            if !entry.edited.series {
+                entry.metadata.series = parsed.series;
+            }
+            if !entry.edited.title {
+                entry.metadata.title = parsed.title;
+            }
+            entry.metadata.tags = parsed.tags;
         }
     }
 
@@ -170,7 +213,14 @@ impl AppState {
 
             let tx = tx.clone();
             let path = entry.path.clone();
-            let metadata = entry.metadata.clone();
+            let mut metadata = entry.metadata.clone();
+            // Global preset Series/Title override the per-folder value when set.
+            if !self.settings.preset_series.trim().is_empty() {
+                metadata.series = self.settings.preset_series.trim().to_string();
+            }
+            if !self.settings.preset_title.trim().is_empty() {
+                metadata.title = self.settings.preset_title.trim().to_string();
+            }
             let preset = self.settings.preset.clone();
             let page_rules = self.settings.page_rules.clone();
             let ctx = ctx.clone();

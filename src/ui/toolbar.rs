@@ -1,6 +1,15 @@
 use crate::app::AppState;
 use crate::models::{ComicInfoField, ConversionStatus, PageRule, PageType, PresetField};
 
+/// Split a comma-separated preset value into trimmed, non-empty items.
+fn split_csv(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
 pub fn render_top(app: &mut AppState, ui: &mut egui::Ui) {
     egui::Panel::top("toolbar_top")
         .min_size(32.0)
@@ -29,13 +38,31 @@ pub fn render_top(app: &mut AppState, ui: &mut egui::Ui) {
                 if ui.button(preset_label).clicked() {
                     app.show_preset = !app.show_preset;
                 }
+
+                let tag_lib_label = if app.show_tag_library {
+                    "Tag Library ▾"
+                } else {
+                    "Tag Library ▸"
+                };
+                if ui.button(tag_lib_label).clicked() {
+                    app.show_tag_library = !app.show_tag_library;
+                }
+
+                let genre_lib_label = if app.show_genre_library {
+                    "Genre Library ▾"
+                } else {
+                    "Genre Library ▸"
+                };
+                if ui.button(genre_lib_label).clicked() {
+                    app.show_genre_library = !app.show_genre_library;
+                }
             });
 
             if app.show_format_help {
                 ui.add_space(2.0);
                 ui.label(
                     egui::RichText::new(
-                        "{author} = author name    {title} = title    {tags} = tags (comma-separated)\nExample: [{author}] {title} ({tags})  →  [Author] Title (tag1,tag2)",
+                        "{author} = author name    {title} = series & episode title    {tags} = title boundary only (not stored)\nExample: [{author}] {title} ({tags})  →  [Author] Title (trailing part ignored)",
                     )
                     .small()
                     .color(egui::Color32::GRAY),
@@ -45,6 +72,12 @@ pub fn render_top(app: &mut AppState, ui: &mut egui::Ui) {
             if app.show_preset {
                 render_preset(app, ui);
             }
+            if app.show_tag_library {
+                render_tag_library(app, ui);
+            }
+            if app.show_genre_library {
+                render_genre_library(app, ui);
+            }
             ui.add_space(4.0);
         });
 }
@@ -53,10 +86,35 @@ fn render_preset(app: &mut AppState, ui: &mut egui::Ui) {
     ui.add_space(4.0);
     ui.separator();
     ui.label(
-        egui::RichText::new("Default ComicInfo fields applied to every CBZ")
-            .small()
-            .color(egui::Color32::GRAY),
+        egui::RichText::new(
+            "Default ComicInfo fields applied to every CBZ  (use {author}, {title} for per-folder values)",
+        )
+        .small()
+        .color(egui::Color32::GRAY),
     );
+
+    // Global Series/Title overrides (blank = use the per-folder value).
+    ui.horizontal(|ui| {
+        ui.label("Series");
+        ui.add(
+            egui::TextEdit::singleline(&mut app.settings.preset_series)
+                .desired_width(200.0)
+                .hint_text("override all folders (blank = per-folder)"),
+        );
+    });
+    ui.horizontal(|ui| {
+        ui.label("Title");
+        ui.add(
+            egui::TextEdit::singleline(&mut app.settings.preset_title)
+                .desired_width(200.0)
+                .hint_text("override all folders (blank = per-folder)"),
+        );
+    });
+
+    // Snapshot the libraries so the chip selectors can read them while the
+    // preset rows hold a mutable borrow of `app.settings.preset`.
+    let tag_library = app.settings.tag_library.clone();
+    let genre_library = app.settings.genre_library.clone();
 
     let mut to_remove: Vec<usize> = Vec::new();
     for (i, pf) in app.settings.preset.iter_mut().enumerate() {
@@ -95,10 +153,10 @@ fn render_preset(app: &mut AppState, ui: &mut egui::Ui) {
                         }
                     });
             } else {
-                let hint = if pf.field == ComicInfoField::Tags {
-                    "merged with folder-name tags"
-                } else {
-                    "value"
+                let hint = match pf.field {
+                    ComicInfoField::Tags => "pick from Tag Library or type",
+                    ComicInfoField::Genre => "pick from Genre Library or type",
+                    _ => "value",
                 };
                 ui.add(
                     egui::TextEdit::singleline(&mut pf.value)
@@ -111,6 +169,18 @@ fn render_preset(app: &mut AppState, ui: &mut egui::Ui) {
                 to_remove.push(i);
             }
         });
+
+        // Library chip selectors, laid out below the row for Tags and Genre.
+        let library = match pf.field {
+            ComicInfoField::Tags => Some(&tag_library),
+            ComicInfoField::Genre => Some(&genre_library),
+            _ => None,
+        };
+        if let Some(library) = library {
+            if !library.is_empty() {
+                render_library_chips(ui, library, &mut pf.value);
+            }
+        }
     }
 
     for i in to_remove.into_iter().rev() {
@@ -170,6 +240,145 @@ fn render_page_rules(app: &mut AppState, ui: &mut egui::Ui) {
             double_page: false,
         });
     }
+}
+
+/// Renders library values as wrap-around toggle chips that select into a
+/// comma-separated preset `value`. Values already in `value` but missing from
+/// the library are preserved untouched.
+fn render_library_chips(ui: &mut egui::Ui, library: &[String], value: &mut String) {
+    let mut selected = split_csv(value);
+    let mut changed = false;
+    ui.horizontal_wrapped(|ui| {
+        for item in library {
+            let is_selected = selected.iter().any(|s| s == item);
+            if ui.selectable_label(is_selected, item).clicked() {
+                if is_selected {
+                    selected.retain(|s| s != item);
+                } else {
+                    selected.push(item.clone());
+                }
+                changed = true;
+            }
+        }
+    });
+    if changed {
+        *value = selected.join(", ");
+    }
+}
+
+/// Editable library list (add / inline-edit / remove). Returns `(old, new)`
+/// rename pairs detected when an entry's text field loses focus, so the caller
+/// can propagate the rename to already-selected values.
+fn render_string_library(
+    ui: &mut egui::Ui,
+    description: &str,
+    library: &mut Vec<String>,
+    input: &mut String,
+    edit_snapshot: &mut Option<String>,
+) -> Vec<(String, String)> {
+    ui.add_space(4.0);
+    ui.separator();
+    ui.label(
+        egui::RichText::new(description)
+            .small()
+            .color(egui::Color32::GRAY),
+    );
+
+    let mut renames: Vec<(String, String)> = Vec::new();
+    let mut to_remove: Vec<usize> = Vec::new();
+    for (i, item) in library.iter_mut().enumerate() {
+        ui.horizontal(|ui| {
+            let resp = ui.add(egui::TextEdit::singleline(item).desired_width(200.0));
+            if resp.gained_focus() {
+                *edit_snapshot = Some(item.clone());
+            }
+            if resp.lost_focus() {
+                if let Some(old) = edit_snapshot.take() {
+                    let new = item.trim().to_string();
+                    if new.is_empty() {
+                        *item = old; // reject blank rename
+                    } else if new != old {
+                        *item = new.clone();
+                        renames.push((old, new));
+                    }
+                }
+            }
+            if ui.small_button("✕").clicked() {
+                to_remove.push(i);
+            }
+        });
+    }
+    for i in to_remove.into_iter().rev() {
+        library.remove(i);
+    }
+
+    ui.horizontal(|ui| {
+        let resp = ui.add(
+            egui::TextEdit::singleline(input)
+                .desired_width(200.0)
+                .hint_text("new value"),
+        );
+        let submitted = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        if ui.button("+ Add").clicked() || submitted {
+            let value = input.trim().to_string();
+            if !value.is_empty() && !library.contains(&value) {
+                library.push(value);
+            }
+            input.clear();
+        }
+    });
+
+    renames
+}
+
+/// Apply `(old, new)` renames to every preset row of `field`, de-duplicating.
+fn rename_in_preset(
+    preset: &mut [PresetField],
+    field: ComicInfoField,
+    renames: &[(String, String)],
+) {
+    if renames.is_empty() {
+        return;
+    }
+    for pf in preset.iter_mut().filter(|pf| pf.field == field) {
+        let mut items = split_csv(&pf.value);
+        for (old, new) in renames {
+            for it in items.iter_mut() {
+                if it == old {
+                    *it = new.clone();
+                }
+            }
+        }
+        let mut deduped: Vec<String> = Vec::new();
+        for it in items {
+            if !deduped.contains(&it) {
+                deduped.push(it);
+            }
+        }
+        pf.value = deduped.join(", ");
+    }
+}
+
+fn render_tag_library(app: &mut AppState, ui: &mut egui::Ui) {
+    let renames = render_string_library(
+        ui,
+        "Saved tags — pick these in the preset Tags field",
+        &mut app.settings.tag_library,
+        &mut app.tag_library_input,
+        &mut app.library_edit_snapshot,
+    );
+    rename_in_preset(&mut app.settings.preset, ComicInfoField::Tags, &renames);
+}
+
+fn render_genre_library(app: &mut AppState, ui: &mut egui::Ui) {
+    let renames = render_string_library(
+        ui,
+        "Saved genres — pick these in the preset Genre field",
+        &mut app.settings.genre_library,
+        &mut app.genre_library_input,
+        &mut app.library_edit_snapshot,
+    );
+    rename_in_preset(&mut app.settings.preset, ComicInfoField::Genre, &renames);
 }
 
 pub fn render_bottom(app: &mut AppState, ui: &mut egui::Ui) {

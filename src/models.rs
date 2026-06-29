@@ -3,16 +3,16 @@ use std::path::PathBuf;
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ParsedMetadata {
     pub author: Vec<String>,
+    pub series: String,
     pub title: String,
     pub tags: Vec<String>,
 }
 
 /// ComicInfo.xml fields that can be configured via the global preset.
-/// `Title` and `Writer` are intentionally excluded: they come from the
-/// per-folder name parsing.
+/// `Series`, `Title` and `Writer` are intentionally excluded: they come from
+/// the per-folder name parsing / manual edits.
 #[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ComicInfoField {
-    Series,
     Number,
     Count,
     Volume,
@@ -51,7 +51,6 @@ pub enum ComicInfoField {
 impl ComicInfoField {
     /// Full list in canonical ComicInfo.xml element order.
     pub const ALL: &'static [ComicInfoField] = &[
-        ComicInfoField::Series,
         ComicInfoField::Number,
         ComicInfoField::Count,
         ComicInfoField::Volume,
@@ -90,7 +89,6 @@ impl ComicInfoField {
     /// XML element name (also used as the dropdown label).
     pub fn xml_tag(self) -> &'static str {
         match self {
-            ComicInfoField::Series => "Series",
             ComicInfoField::Number => "Number",
             ComicInfoField::Count => "Count",
             ComicInfoField::Volume => "Volume",
@@ -272,10 +270,20 @@ impl Default for ConversionStatus {
     }
 }
 
+/// Tracks which per-folder fields the user has manually edited so a re-parse
+/// (e.g. on format template change) does not overwrite them. Manual wins.
+#[derive(Clone, Default)]
+pub struct EditedFields {
+    pub author: bool,
+    pub series: bool,
+    pub title: bool,
+}
+
 pub struct FolderEntry {
     pub path: PathBuf,
     pub folder_name: String,
     pub metadata: ParsedMetadata,
+    pub edited: EditedFields,
     pub status: ConversionStatus,
     pub editing: bool,
 }

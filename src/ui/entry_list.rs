@@ -12,9 +12,9 @@ pub fn render(app: &mut AppState, ui: &mut egui::Ui) {
             .min_col_width(60.0)
             .show(ui, |ui| {
                 ui.strong("Folder");
+                ui.strong("Series");
                 ui.strong("Author");
                 ui.strong("Title");
-                ui.strong("Tags");
                 ui.strong("Status");
                 ui.label("");
                 ui.end_row();
@@ -29,6 +29,13 @@ pub fn render(app: &mut AppState, ui: &mut egui::Ui) {
                     ui.label(short_name).on_hover_text(&entry.folder_name);
 
                     if entry.editing {
+                        if ui
+                            .text_edit_singleline(&mut entry.metadata.series)
+                            .changed()
+                        {
+                            entry.edited.series = true;
+                        }
+
                         let mut author_str = entry.metadata.author.join(",");
                         if ui.text_edit_singleline(&mut author_str).changed() {
                             entry.metadata.author = author_str
@@ -36,21 +43,16 @@ pub fn render(app: &mut AppState, ui: &mut egui::Ui) {
                                 .map(|a| a.trim().to_string())
                                 .filter(|a| !a.is_empty())
                                 .collect();
+                            entry.edited.author = true;
                         }
-                        ui.text_edit_singleline(&mut entry.metadata.title);
 
-                        let mut tags_str = entry.metadata.tags.join(",");
-                        if ui.text_edit_singleline(&mut tags_str).changed() {
-                            entry.metadata.tags = tags_str
-                                .split(',')
-                                .map(|t| t.trim().to_string())
-                                .filter(|t| !t.is_empty())
-                                .collect();
+                        if ui.text_edit_singleline(&mut entry.metadata.title).changed() {
+                            entry.edited.title = true;
                         }
                     } else {
+                        ui.label(&entry.metadata.series);
                         ui.label(entry.metadata.author.join(", "));
                         ui.label(&entry.metadata.title);
-                        ui.label(entry.metadata.tags.join(", "));
                     }
 
                     match &entry.status {
