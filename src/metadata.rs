@@ -13,11 +13,11 @@ const AUTHOR_DEFAULT: &[ComicInfoField] = &[
 ];
 
 /// Replace per-folder placeholders in a free-text preset value. Mirrors the
-/// `{author}`/`{title}` tokens used by the folder-name format pattern.
+/// `{author}`/`{series}` tokens used by the folder-name format pattern.
 fn apply_placeholders(value: &str, meta: &ParsedMetadata) -> String {
     value
         .replace("{author}", &meta.author.join(", "))
-        .replace("{title}", &meta.title)
+        .replace("{series}", &meta.series)
 }
 
 pub fn build_comic_info_xml(
@@ -29,9 +29,8 @@ pub fn build_comic_info_xml(
     let mut body = String::new();
     let author_value = meta.author.join(", ");
 
-    // Title, Series and Writer come from the per-folder parsing / edits, always
-    // first. Spec-wise Series is the work title and Title the individual episode.
-    push_element(&mut body, "Title", &meta.title);
+    // Series and Writer come from the per-folder parsing / edits, written first.
+    // Title is a regular preset field, emitted by the loop below.
     push_element(&mut body, "Series", &meta.series);
     push_element(&mut body, "Writer", &author_value);
 
@@ -165,7 +164,6 @@ mod tests {
         ParsedMetadata {
             author: vec!["Author".into()],
             series: "Title".into(),
-            title: "Title".into(),
             tags: vec!["SF".into(), "Fantasy".into()],
         }
     }
@@ -180,11 +178,21 @@ mod tests {
     #[test]
     fn empty_preset_emits_core_fields() {
         let xml = build_comic_info_xml(&meta(), &[], 0, &[]);
-        assert!(xml.contains("<Title>Title</Title>"));
+        assert!(xml.contains("<Series>Title</Series>"));
         assert!(xml.contains("<Writer>Author</Writer>"));
         assert!(xml.contains("<Tags>SF, Fantasy</Tags>"));
+        // Title is preset-only: not emitted without a preset row.
+        assert!(!xml.contains("<Title>"));
         // No Manga line unless preset provides it.
         assert!(!xml.contains("<Manga>"));
+    }
+
+    #[test]
+    fn title_preset_field_emitted() {
+        // Title behaves like any other preset field, including placeholders.
+        let preset = vec![pf(ComicInfoField::Title, "{series}")];
+        let xml = build_comic_info_xml(&meta(), &preset, 0, &[]);
+        assert!(xml.contains("<Title>Title</Title>"));
     }
 
     #[test]
@@ -217,12 +225,11 @@ mod tests {
     fn xml_escaped() {
         let m = ParsedMetadata {
             author: vec![],
-            series: String::new(),
-            title: "Tom & <Jerry>".into(),
+            series: "Tom & <Jerry>".into(),
             tags: vec![],
         };
         let xml = build_comic_info_xml(&m, &[], 0, &[]);
-        assert!(xml.contains("<Title>Tom &amp; &lt;Jerry&gt;</Title>"));
+        assert!(xml.contains("<Series>Tom &amp; &lt;Jerry&gt;</Series>"));
     }
 
     #[test]
@@ -230,12 +237,10 @@ mod tests {
         let m = ParsedMetadata {
             author: vec![],
             series: "Work".into(),
-            title: "Ep 1".into(),
             tags: vec![],
         };
         let xml = build_comic_info_xml(&m, &[], 0, &[]);
         assert!(xml.contains("<Series>Work</Series>"));
-        assert!(xml.contains("<Title>Ep 1</Title>"));
     }
 
     #[test]
@@ -250,7 +255,6 @@ mod tests {
         let m = ParsedMetadata {
             author: vec!["A".into(), "B".into()],
             series: String::new(),
-            title: "T".into(),
             tags: vec![],
         };
         let preset = vec![pf(ComicInfoField::Publisher, "by {author}")];
@@ -278,7 +282,6 @@ mod tests {
         let m = ParsedMetadata {
             author: vec!["Kim".into()],
             series: String::new(),
-            title: "T".into(),
             tags: vec![],
         };
         let xml = build_comic_info_xml(&m, &[], 0, &[]);
@@ -302,7 +305,6 @@ mod tests {
         let m = ParsedMetadata {
             author: vec![],
             series: String::new(),
-            title: "T".into(),
             tags: vec![],
         };
         let xml = build_comic_info_xml(&m, &[], 0, &[]);
@@ -315,7 +317,6 @@ mod tests {
         let m = ParsedMetadata {
             author: vec!["Kim".into()],
             series: String::new(),
-            title: "T".into(),
             tags: vec![],
         };
         let preset = vec![pf(ComicInfoField::CoverArtist, "Lee")];

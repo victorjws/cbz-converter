@@ -21,7 +21,7 @@ pub fn render_top(app: &mut AppState, ui: &mut egui::Ui) {
                 let response = ui.add(
                     egui::TextEdit::singleline(&mut template)
                         .desired_width(340.0)
-                        .hint_text("[{author}] {title} ({tags})"),
+                        .hint_text("[{author}] {series} ({tags})"),
                 );
                 if response.changed() {
                     app.update_format_template(&template);
@@ -62,7 +62,7 @@ pub fn render_top(app: &mut AppState, ui: &mut egui::Ui) {
                 ui.add_space(2.0);
                 ui.label(
                     egui::RichText::new(
-                        "{author} = author name    {title} = series & episode title    {tags} = title boundary only (not stored)\nExample: [{author}] {title} ({tags})  →  [Author] Title (trailing part ignored)",
+                        "{author} = author name    {series} = work/series title    {tags} = title boundary only (not stored)\nExample: [{author}] {series} ({tags})  →  [Author] Series (trailing part ignored).  Title is optional: add it as a preset field.",
                     )
                     .small()
                     .color(egui::Color32::GRAY),
@@ -87,25 +87,17 @@ fn render_preset(app: &mut AppState, ui: &mut egui::Ui) {
     ui.separator();
     ui.label(
         egui::RichText::new(
-            "Default ComicInfo fields applied to every CBZ  (use {author}, {title} for per-folder values)",
+            "Default ComicInfo fields applied to every CBZ  (use {author}, {series} for per-folder values)",
         )
         .small()
         .color(egui::Color32::GRAY),
     );
 
-    // Global Series/Title overrides (blank = use the per-folder value).
+    // Global Series override (blank = use the per-folder value).
     ui.horizontal(|ui| {
         ui.label("Series");
         ui.add(
             egui::TextEdit::singleline(&mut app.settings.preset_series)
-                .desired_width(200.0)
-                .hint_text("override all folders (blank = per-folder)"),
-        );
-    });
-    ui.horizontal(|ui| {
-        ui.label("Title");
-        ui.add(
-            egui::TextEdit::singleline(&mut app.settings.preset_title)
                 .desired_width(200.0)
                 .hint_text("override all folders (blank = per-folder)"),
         );

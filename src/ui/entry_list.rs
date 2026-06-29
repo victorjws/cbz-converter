@@ -6,7 +6,7 @@ pub fn render(app: &mut AppState, ui: &mut egui::Ui) {
 
     egui::ScrollArea::vertical().show(ui, |ui| {
         egui::Grid::new("entries")
-            .num_columns(6)
+            .num_columns(5)
             .spacing([8.0, 4.0])
             .striped(true)
             .min_col_width(60.0)
@@ -14,7 +14,6 @@ pub fn render(app: &mut AppState, ui: &mut egui::Ui) {
                 ui.strong("Folder");
                 ui.strong("Series");
                 ui.strong("Author");
-                ui.strong("Title");
                 ui.strong("Status");
                 ui.label("");
                 ui.end_row();
@@ -45,14 +44,9 @@ pub fn render(app: &mut AppState, ui: &mut egui::Ui) {
                                 .collect();
                             entry.edited.author = true;
                         }
-
-                        if ui.text_edit_singleline(&mut entry.metadata.title).changed() {
-                            entry.edited.title = true;
-                        }
                     } else {
                         ui.label(&entry.metadata.series);
                         ui.label(entry.metadata.author.join(", "));
-                        ui.label(&entry.metadata.title);
                     }
 
                     match &entry.status {

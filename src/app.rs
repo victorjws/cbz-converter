@@ -12,12 +12,10 @@ pub struct AppSettings {
     pub format_template: String,
     pub preset: Vec<PresetField>,
     pub page_rules: Vec<PageRule>,
-    /// Global Series/Title set in the preset. When non-empty they override the
+    /// Global Series set in the preset. When non-empty it overrides the
     /// per-folder value for every CBZ; blank falls back to the per-folder value.
     #[serde(default)]
     pub preset_series: String,
-    #[serde(default)]
-    pub preset_title: String,
     /// Saved tag vocabulary the user picks from in the preset Tags field.
     #[serde(default)]
     pub tag_library: Vec<String>,
@@ -29,7 +27,7 @@ pub struct AppSettings {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            format_template: "[{author}] {title} ({tags})".to_string(),
+            format_template: "[{author}] {series} ({tags})".to_string(),
             // Preserves the previously hardcoded ComicInfo behavior.
             preset: vec![PresetField {
                 field: ComicInfoField::Manga,
@@ -42,7 +40,6 @@ impl Default for AppSettings {
                 double_page: false,
             }],
             preset_series: String::new(),
-            preset_title: String::new(),
             tag_library: Vec::new(),
             genre_library: Vec::new(),
         }
@@ -107,11 +104,8 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(cc: &eframe::CreationContext) -> Self {
-        let settings: AppSettings = cc
-            .storage
-            .and_then(|s| eframe::get_value(s, "settings"))
-            .unwrap_or_default();
+    pub fn new(_cc: &eframe::CreationContext) -> Self {
+        let settings = crate::config::load();
 
         let format_pattern = FormatPattern::compile(&settings.format_template);
 
@@ -166,9 +160,6 @@ impl AppState {
             if !entry.edited.series {
                 entry.metadata.series = parsed.series;
             }
-            if !entry.edited.title {
-                entry.metadata.title = parsed.title;
-            }
             entry.metadata.tags = parsed.tags;
         }
     }
@@ -214,12 +205,9 @@ impl AppState {
             let tx = tx.clone();
             let path = entry.path.clone();
             let mut metadata = entry.metadata.clone();
-            // Global preset Series/Title override the per-folder value when set.
+            // Global preset Series overrides the per-folder value when set.
             if !self.settings.preset_series.trim().is_empty() {
                 metadata.series = self.settings.preset_series.trim().to_string();
-            }
-            if !self.settings.preset_title.trim().is_empty() {
-                metadata.title = self.settings.preset_title.trim().to_string();
             }
             let preset = self.settings.preset.clone();
             let page_rules = self.settings.page_rules.clone();
@@ -324,7 +312,7 @@ impl eframe::App for AppState {
         crate::ui::render(self, ui);
     }
 
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, "settings", &self.settings);
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
+        crate::config::save(&self.settings);
     }
 }

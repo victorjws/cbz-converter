@@ -4,15 +4,15 @@ use std::path::PathBuf;
 pub struct ParsedMetadata {
     pub author: Vec<String>,
     pub series: String,
-    pub title: String,
     pub tags: Vec<String>,
 }
 
 /// ComicInfo.xml fields that can be configured via the global preset.
-/// `Series`, `Title` and `Writer` are intentionally excluded: they come from
-/// the per-folder name parsing / manual edits.
+/// `Series` and `Writer` are intentionally excluded: they come from the
+/// per-folder name parsing / manual edits. `Title` is a regular preset field.
 #[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ComicInfoField {
+    Title,
     Number,
     Count,
     Volume,
@@ -51,6 +51,7 @@ pub enum ComicInfoField {
 impl ComicInfoField {
     /// Full list in canonical ComicInfo.xml element order.
     pub const ALL: &'static [ComicInfoField] = &[
+        ComicInfoField::Title,
         ComicInfoField::Number,
         ComicInfoField::Count,
         ComicInfoField::Volume,
@@ -89,6 +90,7 @@ impl ComicInfoField {
     /// XML element name (also used as the dropdown label).
     pub fn xml_tag(self) -> &'static str {
         match self {
+            ComicInfoField::Title => "Title",
             ComicInfoField::Number => "Number",
             ComicInfoField::Count => "Count",
             ComicInfoField::Volume => "Volume",
@@ -276,7 +278,6 @@ impl Default for ConversionStatus {
 pub struct EditedFields {
     pub author: bool,
     pub series: bool,
-    pub title: bool,
 }
 
 pub struct FolderEntry {
