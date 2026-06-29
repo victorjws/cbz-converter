@@ -17,6 +17,8 @@ pub enum ComicInfoField {
     Count,
     Volume,
     AlternateSeries,
+    AlternateNumber,
+    AlternateCount,
     Summary,
     Notes,
     Year,
@@ -43,19 +45,27 @@ pub enum ComicInfoField {
     Locations,
     ScanInformation,
     StoryArc,
+    StoryArcNumber,
     SeriesGroup,
     AgeRating,
+    CommunityRating,
+    MainCharacterOrTeam,
     Review,
+    GTIN,
 }
 
 impl ComicInfoField {
-    /// Full list in canonical ComicInfo.xml element order.
+    /// Full list in canonical ComicInfo.xml element order. This MUST stay in
+    /// spec order: it drives both the preset selector order and the order
+    /// elements are written to ComicInfo.xml.
     pub const ALL: &'static [ComicInfoField] = &[
         ComicInfoField::Title,
         ComicInfoField::Number,
         ComicInfoField::Count,
         ComicInfoField::Volume,
         ComicInfoField::AlternateSeries,
+        ComicInfoField::AlternateNumber,
+        ComicInfoField::AlternateCount,
         ComicInfoField::Summary,
         ComicInfoField::Notes,
         ComicInfoField::Year,
@@ -82,9 +92,13 @@ impl ComicInfoField {
         ComicInfoField::Locations,
         ComicInfoField::ScanInformation,
         ComicInfoField::StoryArc,
+        ComicInfoField::StoryArcNumber,
         ComicInfoField::SeriesGroup,
         ComicInfoField::AgeRating,
+        ComicInfoField::CommunityRating,
+        ComicInfoField::MainCharacterOrTeam,
         ComicInfoField::Review,
+        ComicInfoField::GTIN,
     ];
 
     /// XML element name (also used as the dropdown label).
@@ -95,6 +109,8 @@ impl ComicInfoField {
             ComicInfoField::Count => "Count",
             ComicInfoField::Volume => "Volume",
             ComicInfoField::AlternateSeries => "AlternateSeries",
+            ComicInfoField::AlternateNumber => "AlternateNumber",
+            ComicInfoField::AlternateCount => "AlternateCount",
             ComicInfoField::Summary => "Summary",
             ComicInfoField::Notes => "Notes",
             ComicInfoField::Year => "Year",
@@ -121,9 +137,13 @@ impl ComicInfoField {
             ComicInfoField::Locations => "Locations",
             ComicInfoField::ScanInformation => "ScanInformation",
             ComicInfoField::StoryArc => "StoryArc",
+            ComicInfoField::StoryArcNumber => "StoryArcNumber",
             ComicInfoField::SeriesGroup => "SeriesGroup",
             ComicInfoField::AgeRating => "AgeRating",
+            ComicInfoField::CommunityRating => "CommunityRating",
+            ComicInfoField::MainCharacterOrTeam => "MainCharacterOrTeam",
             ComicInfoField::Review => "Review",
+            ComicInfoField::GTIN => "GTIN",
         }
     }
 
@@ -177,6 +197,15 @@ impl ComicInfoField {
                 | ComicInfoField::SeriesGroup
                 | ComicInfoField::ScanInformation
         )
+    }
+
+    /// Canonical ComicInfo position of this field, used to keep preset rows
+    /// sorted in spec order (matching the XML output order).
+    pub fn order(self) -> usize {
+        Self::ALL
+            .iter()
+            .position(|f| *f == self)
+            .unwrap_or(usize::MAX)
     }
 
     /// Default value for a newly-added row of this field: first allowed value

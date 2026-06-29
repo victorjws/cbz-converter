@@ -110,6 +110,10 @@ fn render_preset(app: &mut AppState, ui: &mut egui::Ui) {
     let tag_library = app.settings.tag_library.clone();
     let genre_library = app.settings.genre_library.clone();
 
+    // Keep preset rows in canonical ComicInfo order (matches the XML output);
+    // stable so multiple rows of the same field keep their relative order.
+    app.settings.preset.sort_by_key(|pf| pf.field.order());
+
     let mut to_remove: Vec<usize> = Vec::new();
     for (i, pf) in app.settings.preset.iter_mut().enumerate() {
         ui.horizontal(|ui| {
