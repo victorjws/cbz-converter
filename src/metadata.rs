@@ -72,7 +72,7 @@ pub fn build_comic_info_xml(
         // Per-page attributes: (Type, DoublePage). Later rules win.
         let mut attrs: Vec<(Option<&'static str>, bool)> = vec![(None, false); page_count];
         for rule in page_rules {
-            if let Some(idx) = rule.resolve(page_count) {
+            for idx in rule.resolve_indices(page_count) {
                 attrs[idx] = (Some(rule.page_type.xml_value()), rule.double_page);
             }
         }
@@ -155,6 +155,7 @@ mod tests {
     fn rule(position: i32, page_type: PageType) -> PageRule {
         PageRule {
             position,
+            end: None,
             page_type,
             double_page: false,
         }
@@ -370,6 +371,7 @@ mod tests {
     fn page_rule_double_page() {
         let rules = vec![PageRule {
             position: 3,
+            end: None,
             page_type: PageType::Story,
             double_page: true,
         }];
@@ -377,6 +379,39 @@ mod tests {
         assert!(xml.contains("<Page Image=\"2\" Type=\"Story\" DoublePage=\"true\" />"));
         // Other pages stay plain.
         assert!(xml.contains("<Page Image=\"0\" />"));
+    }
+
+    #[test]
+    fn page_rule_range_assigns_span() {
+        // Pages 2..=4 (1-based) → indices 1,2,3 get Story; 0 and 4 stay plain.
+        let rules = vec![PageRule {
+            position: 2,
+            end: Some(4),
+            page_type: PageType::Story,
+            double_page: false,
+        }];
+        let xml = build_comic_info_xml(&meta(), &[], 5, &rules);
+        assert!(xml.contains("<Page Image=\"0\" />"));
+        assert!(xml.contains("<Page Image=\"1\" Type=\"Story\" />"));
+        assert!(xml.contains("<Page Image=\"2\" Type=\"Story\" />"));
+        assert!(xml.contains("<Page Image=\"3\" Type=\"Story\" />"));
+        assert!(xml.contains("<Page Image=\"4\" />"));
+    }
+
+    #[test]
+    fn page_rule_range_to_last() {
+        // Pages 2..=-1 spans from index 1 through the last page.
+        let rules = vec![PageRule {
+            position: 2,
+            end: Some(-1),
+            page_type: PageType::Editorial,
+            double_page: false,
+        }];
+        let xml = build_comic_info_xml(&meta(), &[], 4, &rules);
+        assert!(xml.contains("<Page Image=\"0\" />"));
+        assert!(xml.contains("<Page Image=\"1\" Type=\"Editorial\" />"));
+        assert!(xml.contains("<Page Image=\"2\" Type=\"Editorial\" />"));
+        assert!(xml.contains("<Page Image=\"3\" Type=\"Editorial\" />"));
     }
 
     #[test]

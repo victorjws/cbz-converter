@@ -193,7 +193,7 @@ fn render_preset(app: &mut AppState, ui: &mut egui::Ui) {
 fn render_page_rules(app: &mut AppState, ui: &mut egui::Ui) {
     ui.add_space(6.0);
     ui.label(
-        egui::RichText::new("Page types  (position: 1 = first page, -1 = last page)")
+        egui::RichText::new("Page types  (page: 1 = first, -1 = last; toggle range for a span)")
             .small()
             .color(egui::Color32::GRAY),
     );
@@ -206,6 +206,13 @@ fn render_page_rules(app: &mut AppState, ui: &mut egui::Ui) {
                     .speed(1)
                     .prefix("page "),
             );
+            let mut is_range = rule.end.is_some();
+            if ui.checkbox(&mut is_range, "range").changed() {
+                rule.end = if is_range { Some(rule.position) } else { None };
+            }
+            if let Some(end) = &mut rule.end {
+                ui.add(egui::DragValue::new(end).speed(1).prefix("to "));
+            }
             egui::ComboBox::from_id_salt(("page_type", i))
                 .selected_text(rule.page_type.label())
                 .width(150.0)
@@ -228,6 +235,7 @@ fn render_page_rules(app: &mut AppState, ui: &mut egui::Ui) {
     if ui.button("+ Add page type").clicked() {
         app.settings.page_rules.push(PageRule {
             position: 1,
+            end: None,
             page_type: PageType::FrontCover,
             double_page: false,
         });

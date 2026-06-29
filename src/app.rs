@@ -36,6 +36,7 @@ impl Default for AppSettings {
             // First page is the cover by convention; user can change/remove it.
             page_rules: vec![PageRule {
                 position: 1,
+                end: None,
                 page_type: PageType::FrontCover,
                 double_page: false,
             }],

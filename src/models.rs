@@ -227,26 +227,30 @@ impl PageType {
     }
 }
 
-/// Assigns page attributes to a page position. `position` is 1-based; negative
-/// values count from the end (`-1` = last page). `double_page` maps to the
-/// ComicInfo `<Page DoublePage="true">` attribute, independent of the type.
+/// Assigns page attributes to a page position or range. `position` is 1-based
+/// (the range start); negative values count from the end (`-1` = last page).
+/// `end` (when set) is the inclusive range end, resolved the same way. `end =
+/// None` targets the single `position`. `double_page` maps to the ComicInfo
+/// `<Page DoublePage="true">` attribute, independent of the type.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PageRule {
     pub position: i32,
+    #[serde(default)]
+    pub end: Option<i32>,
     pub page_type: PageType,
     #[serde(default)]
     pub double_page: bool,
 }
 
 impl PageRule {
-    /// Resolve to a 0-based page index for a book of `page_count` pages,
-    /// or `None` if the position falls outside the range.
-    pub fn resolve(&self, page_count: usize) -> Option<usize> {
+    /// Resolve a 1-based (negative = from end) position to a 0-based index for a
+    /// book of `page_count` pages, or `None` if it falls outside the range.
+    fn resolve_pos(pos: i32, page_count: usize) -> Option<usize> {
         let n = page_count as i32;
-        let idx = if self.position > 0 {
-            self.position - 1
-        } else if self.position < 0 {
-            n + self.position
+        let idx = if pos > 0 {
+            pos - 1
+        } else if pos < 0 {
+            n + pos
         } else {
             return None;
         };
@@ -254,6 +258,39 @@ impl PageRule {
             Some(idx as usize)
         } else {
             None
+        }
+    }
+
+    /// Clamp a 1-based (negative = from end) position into `[0, n-1]`, or `None`
+    /// for an empty book / invalid `0`. Used for range endpoints so e.g. "3 to
+    /// 999" means "3 to last".
+    fn clamp_pos(pos: i32, page_count: usize) -> Option<usize> {
+        let n = page_count as i32;
+        if n == 0 || pos == 0 {
+            return None;
+        }
+        let idx = if pos > 0 { pos - 1 } else { n + pos };
+        Some(idx.clamp(0, n - 1) as usize)
+    }
+
+    /// 0-based page indices this rule targets. With `end = None` this is the
+    /// single (strictly in-range) `position`; with `end = Some(_)` it is the
+    /// inclusive range between the two clamped endpoints.
+    pub fn resolve_indices(&self, page_count: usize) -> Vec<usize> {
+        match self.end {
+            None => Self::resolve_pos(self.position, page_count)
+                .into_iter()
+                .collect(),
+            Some(e) => match (
+                Self::clamp_pos(self.position, page_count),
+                Self::clamp_pos(e, page_count),
+            ) {
+                (Some(a), Some(b)) => {
+                    let (lo, hi) = if a <= b { (a, b) } else { (b, a) };
+                    (lo..=hi).collect()
+                }
+                _ => Vec::new(),
+            },
         }
     }
 }
