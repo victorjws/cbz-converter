@@ -219,6 +219,11 @@ impl AppState {
                             // Replace the current preset with the imported fields.
                             self.settings.preset = imported.preset;
                             self.settings.preset_series = imported.series.unwrap_or_default();
+                            // Reflect page info too, but keep the existing rules
+                            // when the document carries none.
+                            if !imported.page_rules.is_empty() {
+                                self.settings.page_rules = imported.page_rules;
+                            }
                             self.show_preset = true;
                         }
                         Err(e) => eprintln!("[import] {}: {e}", path.display()),

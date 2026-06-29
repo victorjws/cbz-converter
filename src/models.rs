@@ -231,7 +231,7 @@ pub struct PresetField {
 
 /// ComicInfo `<Page Type="...">` values. `Story` is the spec default and is
 /// emitted by leaving the attribute off.
-#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum PageType {
     FrontCover,
     InnerCover,
@@ -279,6 +279,12 @@ impl PageType {
 
     pub fn label(self) -> &'static str {
         self.xml_value()
+    }
+
+    /// Reverse of `xml_value`: find the page type for a `<Page Type="...">`
+    /// attribute value.
+    pub fn from_xml_value(value: &str) -> Option<PageType> {
+        Self::ALL.iter().copied().find(|t| t.xml_value() == value)
     }
 }
 
