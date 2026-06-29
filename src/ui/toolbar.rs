@@ -1,6 +1,12 @@
 use crate::app::AppState;
 use crate::models::{ComicInfoField, ConversionStatus, PageRule, PageType, PresetField};
 
+/// Sort strings case-insensitively with natural ordering (so `tag2` < `tag10`).
+/// Used to keep the Tag/Genre libraries and their chip selectors alphabetized.
+fn sort_strings(items: &mut [String]) {
+    items.sort_by(|a, b| natord::compare(&a.to_lowercase(), &b.to_lowercase()));
+}
+
 /// Split a comma- or newline-separated preset value into trimmed, non-empty
 /// items. Newlines count as separators so multi-line value boxes parse cleanly.
 fn split_csv(value: &str) -> Vec<String> {
@@ -106,9 +112,12 @@ fn render_preset(app: &mut AppState, ui: &mut egui::Ui) {
     });
 
     // Snapshot the libraries so the chip selectors can read them while the
-    // preset rows hold a mutable borrow of `app.settings.preset`.
-    let tag_library = app.settings.tag_library.clone();
-    let genre_library = app.settings.genre_library.clone();
+    // preset rows hold a mutable borrow of `app.settings.preset`. Sort the
+    // snapshots so the chips appear alphabetized.
+    let mut tag_library = app.settings.tag_library.clone();
+    let mut genre_library = app.settings.genre_library.clone();
+    sort_strings(&mut tag_library);
+    sort_strings(&mut genre_library);
 
     // Keep preset rows in canonical ComicInfo order (matches the XML output);
     // stable so multiple rows of the same field keep their relative order.
@@ -310,6 +319,12 @@ fn render_string_library(
             .small()
             .color(egui::Color32::GRAY),
     );
+
+    // Keep the saved library alphabetized, but not while a row is being edited
+    // (sorting mid-keystroke would make the focused row jump around).
+    if edit_snapshot.is_none() {
+        sort_strings(library);
+    }
 
     let mut renames: Vec<(String, String)> = Vec::new();
     let mut to_remove: Vec<usize> = Vec::new();
