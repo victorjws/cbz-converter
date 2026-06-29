@@ -108,7 +108,7 @@ fn merge_tags(meta: &ParsedMetadata, preset: &[PresetField]) -> Vec<String> {
         .filter(|pf| pf.field == ComicInfoField::Tags)
         .flat_map(|pf| {
             apply_placeholders(&pf.value, meta)
-                .split(',')
+                .split([',', '\n'])
                 .map(|t| t.trim().to_string())
                 .collect::<Vec<_>>()
         });
@@ -213,6 +213,14 @@ mod tests {
         let preset = vec![pf(ComicInfoField::Tags, "Fantasy, Webtoon")];
         let xml = build_comic_info_xml(&meta(), &preset, 0, &[]);
         assert!(xml.contains("<Tags>SF, Fantasy, Webtoon</Tags>"));
+    }
+
+    #[test]
+    fn tags_split_on_newlines() {
+        // Multi-line Tags box: newlines act as separators alongside commas.
+        let preset = vec![pf(ComicInfoField::Tags, "Webtoon\nDrama, Action")];
+        let xml = build_comic_info_xml(&meta(), &preset, 0, &[]);
+        assert!(xml.contains("<Tags>SF, Fantasy, Webtoon, Drama, Action</Tags>"));
     }
 
     #[test]

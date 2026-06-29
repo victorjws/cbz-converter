@@ -1,10 +1,11 @@
 use crate::app::AppState;
 use crate::models::{ComicInfoField, ConversionStatus, PageRule, PageType, PresetField};
 
-/// Split a comma-separated preset value into trimmed, non-empty items.
+/// Split a comma- or newline-separated preset value into trimmed, non-empty
+/// items. Newlines count as separators so multi-line value boxes parse cleanly.
 fn split_csv(value: &str) -> Vec<String> {
     value
-        .split(',')
+        .split([',', '\n'])
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect()
@@ -96,9 +97,10 @@ fn render_preset(app: &mut AppState, ui: &mut egui::Ui) {
     // Global Series override (blank = use the per-folder value).
     ui.horizontal(|ui| {
         ui.label("Series");
+        let w = (ui.available_width() - 4.0).max(160.0);
         ui.add(
             egui::TextEdit::singleline(&mut app.settings.preset_series)
-                .desired_width(200.0)
+                .desired_width(w)
                 .hint_text("override all folders (blank = per-folder)"),
         );
     });
@@ -150,11 +152,22 @@ fn render_preset(app: &mut AppState, ui: &mut egui::Ui) {
                     ComicInfoField::Genre => "pick from Genre Library or type",
                     _ => "value",
                 };
-                ui.add(
-                    egui::TextEdit::singleline(&mut pf.value)
-                        .desired_width(200.0)
-                        .hint_text(hint),
-                );
+                // Fill the panel width, leaving room for the trailing ✕ button.
+                let w = (ui.available_width() - 28.0).max(160.0);
+                if pf.field.multiline() {
+                    ui.add(
+                        egui::TextEdit::multiline(&mut pf.value)
+                            .desired_width(w)
+                            .desired_rows(1)
+                            .hint_text(hint),
+                    );
+                } else {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut pf.value)
+                            .desired_width(w)
+                            .hint_text(hint),
+                    );
+                }
             }
 
             if ui.small_button("✕").clicked() {

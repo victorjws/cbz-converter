@@ -158,6 +158,27 @@ impl ComicInfoField {
         }
     }
 
+    /// Whether the free-text value input should be a multi-line, wrapping box
+    /// (long values like URLs, tag lists, summaries) rather than a single line.
+    pub fn multiline(self) -> bool {
+        matches!(
+            self,
+            ComicInfoField::Summary
+                | ComicInfoField::Notes
+                | ComicInfoField::Review
+                | ComicInfoField::Web
+                | ComicInfoField::Tags
+                | ComicInfoField::Genre
+                | ComicInfoField::Characters
+                | ComicInfoField::Teams
+                | ComicInfoField::Locations
+                | ComicInfoField::StoryArc
+                | ComicInfoField::AlternateSeries
+                | ComicInfoField::SeriesGroup
+                | ComicInfoField::ScanInformation
+        )
+    }
+
     /// Default value for a newly-added row of this field: first allowed value
     /// for enum fields, empty otherwise.
     pub fn default_value(self) -> String {
