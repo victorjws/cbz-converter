@@ -136,43 +136,47 @@ fn render_preset(app: &mut AppState, ui: &mut egui::Ui) {
                     }
                 });
 
-            // Value input: dropdown for enum fields, free text otherwise.
-            if let Some(allowed) = pf.field.allowed_values() {
-                egui::ComboBox::from_id_salt(("preset_value", i))
-                    .selected_text(pf.value.clone())
-                    .width(200.0)
-                    .show_ui(ui, |ui| {
-                        for v in allowed {
-                            ui.selectable_value(&mut pf.value, v.to_string(), *v);
-                        }
-                    });
-            } else {
-                let hint = match pf.field {
-                    ComicInfoField::Tags => "pick from Tag Library or type",
-                    ComicInfoField::Genre => "pick from Genre Library or type",
-                    _ => "value",
-                };
-                // Fill the panel width, leaving room for the trailing ✕ button.
-                let w = (ui.available_width() - 28.0).max(160.0);
-                if pf.field.multiline() {
-                    ui.add(
-                        egui::TextEdit::multiline(&mut pf.value)
-                            .desired_width(w)
-                            .desired_rows(1)
-                            .hint_text(hint),
-                    );
-                } else {
-                    ui.add(
-                        egui::TextEdit::singleline(&mut pf.value)
-                            .desired_width(w)
-                            .hint_text(hint),
-                    );
+            // Remove button pinned to the far right, value fills the space
+            // between it and the field selector. The right-to-left sub-layout
+            // keeps the ✕ aligned in a column across rows (no per-row drift).
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.small_button("✕").clicked() {
+                    to_remove.push(i);
                 }
-            }
 
-            if ui.small_button("✕").clicked() {
-                to_remove.push(i);
-            }
+                // Value input: dropdown for enum fields, free text otherwise.
+                let w = ui.available_width().max(160.0);
+                if let Some(allowed) = pf.field.allowed_values() {
+                    egui::ComboBox::from_id_salt(("preset_value", i))
+                        .selected_text(pf.value.clone())
+                        .width(w)
+                        .show_ui(ui, |ui| {
+                            for v in allowed {
+                                ui.selectable_value(&mut pf.value, v.to_string(), *v);
+                            }
+                        });
+                } else {
+                    let hint = match pf.field {
+                        ComicInfoField::Tags => "pick from Tag Library or type",
+                        ComicInfoField::Genre => "pick from Genre Library or type",
+                        _ => "value",
+                    };
+                    if pf.field.multiline() {
+                        ui.add(
+                            egui::TextEdit::multiline(&mut pf.value)
+                                .desired_width(w)
+                                .desired_rows(1)
+                                .hint_text(hint),
+                        );
+                    } else {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut pf.value)
+                                .desired_width(w)
+                                .hint_text(hint),
+                        );
+                    }
+                }
+            });
         });
 
         // Library chip selectors, laid out below the row for Tags and Genre.
@@ -299,9 +303,10 @@ fn render_string_library(
 
     let mut renames: Vec<(String, String)> = Vec::new();
     let mut to_remove: Vec<usize> = Vec::new();
-    // Cap the list height and make it scrollable so a large library never
-    // pushes the "+ Add" row below the visible panel area.
-    egui::ScrollArea::vertical()
+    // Cap the list height and make it scrollable (both directions) so a large
+    // library never pushes the "+ Add" row below the visible panel area, and
+    // long values can be reached by scrolling sideways.
+    egui::ScrollArea::both()
         .id_salt(description)
         .max_height(200.0)
         .auto_shrink([false, true])
